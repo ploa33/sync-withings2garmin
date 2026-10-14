@@ -54,7 +54,7 @@ Go to **Actions → Withings → Garmin Sync → Run workflow** (mode `dry-run` 
 
 ---
 
-## ⚡ Real-Time Sync (&lt; 30s) *(Optional)*
+## ⚡ Real-Time Sync *(Optional)*
 
 By default, the workflow runs twice daily (09:00 & 22:00) as a safety net. To trigger a sync **instantly** when stepping off the scale:
 
