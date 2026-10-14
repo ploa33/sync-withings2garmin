@@ -13,7 +13,11 @@ Sync weigh-ins and body composition from any **Withings smart scale** (Body, Bod
 ## 🚀 Setup (5 minutes)
 
 ### 1. Create your private copy
-Click **`Use this template` → `Create a new repository`** and choose **Private**.
+
+[![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)
+
+👉 **[Cliquez ici pour créer votre dépôt privé depuis ce template](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)**  
+*(ou cliquez sur le bouton vert **`Use this template`** sur [le dépôt GitHub](https://github.com/ploa33/sync-withings2garmin), puis choisissez **Private**)*.
 
 > [!IMPORTANT]
 > Your repository **must be private**: your Withings and Garmin session tokens are stored in it (on the `withings2garmin-state` branch).
