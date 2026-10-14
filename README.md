@@ -1,75 +1,68 @@
 # ⚖️ Withings → Garmin Connect
 
+[![Marketplace](https://img.shields.io/badge/Marketplace-Withings_to_Garmin-blue?logo=github-actions&logoColor=white)](https://github.com/marketplace/actions/withings-to-garmin-connect-sync)
+[![Release](https://img.shields.io/github/v/release/ploa33/sync-withings2garmin?logo=github)](https://github.com/ploa33/sync-withings2garmin/releases)
 [![CI](https://github.com/ploa33/sync-withings2garmin/actions/workflows/ci.yml/badge.svg)](https://github.com/ploa33/sync-withings2garmin/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ploa33/sync-withings2garmin)](https://github.com/ploa33/sync-withings2garmin/releases)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-orange.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/ploa33)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-orange.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/ploa33)
 
-Sync weigh-ins and body composition from any **Withings smart scale** (Body, Body+, Body Smart, Body Scan, Body Comp, Body Cardio) to **Garmin Connect** — in real time (< 30 s) if you want. 100 % GitHub Actions: no server, free.
+Sync weigh-ins and body metrics from any **Withings Scale** (Body, Body+, Smart, Scan, Comp, Cardio) to **Garmin Connect** in real-time (< 30s) — 100% GitHub Actions, 0€, 0 server.
 
-**Synced metrics:** weight, body fat %, muscle mass, body water %, bone mass.
+**Metrics:** Weight, Body Fat %, Muscle Mass, Water %, Bone Mass.
 
 ---
 
-## 🚀 Setup (5 minutes)
+## 🚀 Setup (3 minutes)
 
-### 1. Create your private copy
+### 1. Create your private repo
 
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)
 
-👉 **[Cliquez ici pour créer votre dépôt privé depuis ce template](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)**  
-*(ou cliquez sur le bouton vert **`Use this template`** sur [le dépôt GitHub](https://github.com/ploa33/sync-withings2garmin), puis choisissez **Private**)*.
+👉 **[Click here to create your private repo from this template](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)** *(must be **Private** to protect tokens)*.
 
-> [!IMPORTANT]
-> Your repository **must be private**: your Withings and Garmin session tokens are stored in it (on the `withings2garmin-state` branch).
-
-Your copy only needs [`.github/workflows/sync.yml`](.github/workflows/sync.yml). Everything else (`src/`, `tests/`, …) can be deleted: the sync engine is loaded from `ploa33/sync-withings2garmin@v1` at every run, so **you receive fixes automatically**.
-
-### 2. Add your secrets
-In your repository: **Settings → Secrets and variables → Actions → New repository secret**
+### 2. Add Secrets
+In your new repository: **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |---|---|
 | `GARMIN_EMAIL` | Garmin Connect email |
 | `GARMIN_PASSWORD` | Garmin Connect password |
-| `WITHINGS_CLIENT_ID` | From the [Withings Developer Portal](https://developer.withings.com/) (create an app, callback URL: `https://example.com`) |
-| `WITHINGS_CLIENT_SECRET` | Same place |
-| `WITHINGS_REFRESH_TOKEN` | Initial token, see below — only used on the first run |
-| `WEBHOOK_URL` | *(optional)* real-time sync, see below |
+| `WITHINGS_CLIENT_ID` | From [Withings Developer Portal](https://developer.withings.com/dashboard/) |
+| `WITHINGS_CLIENT_SECRET` | From Withings Developer Portal |
+| `WITHINGS_REFRESH_TOKEN` | Initial OAuth token (*see below*) |
+| `WEBHOOK_URL` | *(Optional)* Google Apps Script URL for instant sync |
 
 <details>
-<summary><b>🔑 How to get <code>WITHINGS_REFRESH_TOKEN</code></b></summary>
+<summary><b>🔑 Get your WITHINGS_REFRESH_TOKEN (1 min)</b></summary>
 
-1. Open this URL (replace `YOUR_CLIENT_ID`), log in and authorize:
+1. Open this URL (replace `YOUR_CLIENT_ID` and ensure callback matches your app, e.g. `http://localhost:8080` or `https://example.com`):
    ```text
-   https://account.withings.com/oauth2_user/authorize2?response_type=code&client_id=YOUR_CLIENT_ID&state=init&scope=user.metrics,user.info&redirect_uri=https://example.com
+   https://account.withings.com/oauth2_user/authorize2?response_type=code&client_id=YOUR_CLIENT_ID&state=init&scope=user.metrics,user.info&redirect_uri=http://localhost:8080
    ```
-2. Copy the `code=` value from the address bar of the page you are redirected to (it expires after 30 s).
+2. Log in, authorize, and copy the `code=` from your browser URL bar.
 3. Exchange it:
    ```bash
    curl -X POST https://wbsapi.withings.net/v2/oauth2 \
      -d action=requesttoken -d grant_type=authorization_code \
      -d client_id=YOUR_CLIENT_ID -d client_secret=YOUR_CLIENT_SECRET \
-     -d code=YOUR_CODE -d redirect_uri=https://example.com
+     -d code=YOUR_CODE -d redirect_uri=http://localhost:8080
    ```
-4. Save the `refresh_token` from the response as the `WITHINGS_REFRESH_TOKEN` secret.
+4. Copy `refresh_token` into your GitHub Secret.
 </details>
 
-### 3. Test
-**Actions → Withings → Garmin Sync → Run workflow**, mode `dry-run` (shows your recent weigh-ins without uploading anything), then `sync`.
-
-That's it. The workflow runs twice a day (09:00 and 22:00 Paris time) and catches up any missed weigh-in.
+### 3. Run
+Go to **Actions → Withings → Garmin Sync → Run workflow** (mode `dry-run` or `sync`).
 
 ---
 
-## ⚡ Real-time sync *(optional)*
+## ⚡ Real-Time Webhook *(Optional)*
 
 <details>
-<summary><b>Google Apps Script webhook (sync &lt; 30 s after stepping off the scale)</b></summary>
+<summary><b>Instant sync (&lt; 30s) via Google Apps Script</b></summary>
 
-1. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new) limited to your private repository with **Contents: Read and write**.
-2. Create a project on [Google Apps Script](https://script.google.com/) and paste (fill in your values):
+1. Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new) with **Contents: Read and write** on your private repo.
+2. In [Google Apps Script](https://script.google.com/), paste:
    ```javascript
-   const REPO = "YOUR_GITHUB_USER/YOUR_PRIVATE_REPO";
+   const REPO = "YOUR_USER/YOUR_PRIVATE_REPO";
    const TOKEN = "github_pat_...";
 
    function doPost(e) {
@@ -81,82 +74,35 @@ That's it. The workflow runs twice a day (09:00 and 22:00 Paris time) and catche
      });
      return ContentService.createTextOutput("OK");
    }
-   function doGet() { return ContentService.createTextOutput("Active"); }
+   function doGet(e) { return ContentService.createTextOutput("Active"); }
    ```
-3. **Deploy → New deployment → Web app** (Execute as: *Me*, Who has access: *Anyone*).
-4. Save the deployment URL as the `WEBHOOK_URL` secret. The next run subscribes it to Withings automatically.
+3. **Deploy → Web app** (Access: *Anyone*).
+4. Save the URL as `WEBHOOK_URL` in your GitHub Secrets.
 </details>
 
 ---
 
-## ⚙️ Options
-
-All inputs of the action (edit `with:` in your `sync.yml`):
-
-| Input | Default | Description |
-|---|---|---|
-| `mode` | `sync` | `sync` · `dry-run` (fetch only) · `simulate` (uploads one **fake** weigh-in to test Garmin) |
-| `lookback-days` | `30` | How far back to look for weigh-ins not yet synced |
-| `force-resync` | `false` | Ignore the checkpoint and re-upload every weigh-in in the window |
-| `state-branch` | `withings2garmin-state` | Branch storing tokens and sync state |
-
----
-
-## 🔄 Updates
-
-- **Fixes and improvements** (`v1.x.y`) reach you automatically: your workflow uses `@v1`.
-- **Major versions** (`v2`, …) may require a change on your side: Dependabot opens a pull request in your repository.
-- Prefer full control? Pin a commit: `uses: ploa33/sync-withings2garmin@<commit-sha>`.
-
----
-
-## 🛟 Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `Withings token refresh failed (status=…)` | Generate a new refresh token (see above), update `WITHINGS_REFRESH_TOKEN`, then delete the `withings2garmin-state` branch. |
-| Garmin login fails / MFA | Delete `garth_session/` on the `withings2garmin-state` branch and re-run (a fresh Garmin login is done). |
-| Push to state branch denied | Check **Settings → Actions → General → Workflow permissions** isn't restricted by an organization policy. |
-
-<details>
-<summary><b>How it works</b></summary>
+## 🛠️ How it works & Updates
 
 ```mermaid
 flowchart LR
-  S[Withings scale] --> W[Withings cloud]
-  W -- webhook --> G[Apps Script] -- repository_dispatch --> A
-  C[cron 2x/day] --> A[Your private repo<br/>sync.yml]
-  A -- uses @v1 --> E[ploa33/sync-withings2garmin]
-  E -- read/write --> B[(withings2garmin-state branch)]
-  E --> GC[Garmin Connect]
+  S[Scale] --> W[Withings Cloud]
+  W -. webhook .-> G[Apps Script] -. dispatch .-> A[Private Repo: sync.yml]
+  C[Cron: 9h & 22h] --> A
+  A -- uses: ploa33/sync-withings2garmin@v1 --> M[Garmin Connect]
+  A <--> B[(withings2garmin-state)]
 ```
 
-- The state branch always holds a **single commit** (tokens, Garmin session, last synced timestamp): no token history accumulates and your `main` branch stays clean.
-- Only weigh-ins newer than the last synced one are uploaded: no duplicates in Garmin.
-- State is saved even when a run fails, so the rotating Withings refresh token is never lost.
-</details>
-
-<details>
-<summary><b>Run locally</b></summary>
-
-```bash
-pip install -r requirements.txt
-export WITHINGS_CLIENT_ID=... WITHINGS_CLIENT_SECRET=... WITHINGS_REFRESH_TOKEN=...
-export GARMIN_EMAIL=... GARMIN_PASSWORD=...
-export W2G_STATE_DIR=.state
-python src/sync.py --dry-run
-```
-⚠️ A local token refresh rotates the Withings refresh token: the one stored on the state branch may stop working. Prefer `dry-run` from the Actions tab.
-</details>
+- **Zero Maintenance:** Your repository calls `ploa33/sync-withings2garmin@v1`. When upstream releases fixes (`v1.x.y`), you get them automatically on the next run.
+- **De-duplication:** Only weigh-ins newer than the last recorded checkpoint are uploaded.
+- **Safe State:** OAuth tokens and Garmin SSO session persist on a dedicated single-commit `withings2garmin-state` branch without polluting your commit history.
 
 ---
 
 ## ☕ Support
+If this saved you the cost of a Garmin Index scale, consider supporting the project:
 
-If this saved you the price of a Garmin Index scale, consider buying me a coffee!
-
-<a href="https://buymeacoffee.com/ploa33" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="45"></a>
+<a href="https://buymeacoffee.com/ploa33" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="42"></a>
 
 ## 📄 License
-
 [MIT](LICENSE)
