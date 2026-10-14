@@ -108,6 +108,11 @@ runs:
       run: |
         cd "$W2G_STATE_DIR" 2>/dev/null || exit 0
         git add -A
+        # If nothing exists to commit (e.g. first run failed before writing tokens), exit cleanly
+        if [ -z "$(git status --porcelain)" ]; then
+          echo "No state to save."
+          exit 0
+        fi
         if git rev-parse --verify --quiet HEAD >/dev/null && git diff --cached --quiet HEAD; then
           echo "State unchanged."
           exit 0
