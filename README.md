@@ -16,6 +16,7 @@ Sync weigh-ins and body metrics from any **Withings Scale** (Body, Body+, Smart,
 ### 1. Create your private repo
 
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)
+
 *(must be **Private** to protect tokens)*.
 
 ### 2. Add Secrets
