@@ -17,7 +17,7 @@ Sync weigh-ins and body metrics from any **Withings Scale** (Body, Body+, Smart,
 
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)
 
-*(must be **Private** to protect tokens)*.
+*(must be **Private** to protect your credentials).*
 
 ### 2. Add Secrets
 In your new repository: **Settings → Secrets and variables → Actions**:
@@ -28,29 +28,31 @@ In your new repository: **Settings → Secrets and variables → Actions**:
 | `GARMIN_PASSWORD` | Garmin Connect password |
 | `WITHINGS_CLIENT_ID` | From [Withings Developer Portal](https://developer.withings.com/dashboard/) |
 | `WITHINGS_CLIENT_SECRET` | From Withings Developer Portal |
-| `WITHINGS_REFRESH_TOKEN` | Initial OAuth token (*see below*) |
 | `WEBHOOK_URL` | *(Optional)* Google Apps Script URL for instant sync |
 
+> **No `WITHINGS_REFRESH_TOKEN` needed.** The action handles the full OAuth flow for you in the next step.
+
+### 3. First Run — Authorize Withings (no curl, no terminal)
+
+Go to **Actions → Withings → Garmin Sync → Run workflow**.
+
+**If this is your first run**, the action will display a step-by-step guide directly in the **Job Summary** tab with a one-click Withings authorization link.
+
+Follow the guide (2 steps total):
+
+1. **Run the workflow once** (leave all fields empty). Open the completed run → **Summary** tab → click the Withings auth link → log in and authorize.
+2. **Copy the `code=`** value from your browser's address bar, then **Run the workflow again** and paste it in the **`withings_code`** field.
+
+The action exchanges the code, saves tokens to the `withings2garmin-state` branch, and syncs your first weigh-in. **Done — tokens rotate automatically from now on.**
+
 <details>
-<summary><b>🔑 Get your WITHINGS_REFRESH_TOKEN (1 min)</b></summary>
+<summary><b>🔐 Garmin 2FA (MFA) — first login</b></summary>
 
-1. Open this URL (replace `YOUR_CLIENT_ID` and ensure callback matches your app, e.g. `http://localhost:8080` or `https://example.com`):
-   ```text
-   https://account.withings.com/oauth2_user/authorize2?response_type=code&client_id=YOUR_CLIENT_ID&state=init&scope=user.metrics,user.info&redirect_uri=http://localhost:8080
-   ```
-2. Log in, authorize, and copy the `code=` from your browser URL bar.
-3. Exchange it:
-   ```bash
-   curl -X POST https://wbsapi.withings.net/v2/oauth2 \
-     -d action=requesttoken -d grant_type=authorization_code \
-     -d client_id=YOUR_CLIENT_ID -d client_secret=YOUR_CLIENT_SECRET \
-     -d code=YOUR_CODE -d redirect_uri=http://localhost:8080
-   ```
-4. Copy `refresh_token` into your GitHub Secret.
+If your Garmin account has **2-factor authentication enabled**, you will need to provide your MFA code once (the SSO session is then persisted in the state branch).
+
+On the second run (step 2 above), also fill in the **`garmin_mfa_code`** field with your current TOTP or email OTP code.
+
 </details>
-
-### 3. Run
-Go to **Actions → Withings → Garmin Sync → Run workflow** (mode `dry-run` or `sync`).
 
 ---
 
@@ -61,41 +63,61 @@ By default, the workflow runs twice daily (09:00 & 22:00) as a safety net. To tr
 <details>
 <summary><b>Setup Google Apps Script Webhook Relay (2 min)</b></summary>
 
-Withings sends a webhook when a new weigh-in occurs, and Google Apps Script acts as a free, serverless bridge to trigger your GitHub Actions workflow:
+Withings sends a webhook when a new weigh-in occurs, and Google Apps Script acts as a free, serverless bridge to trigger your GitHub Actions workflow.
 
 1. **GitHub Token:** Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new):
    - Repository access: **Only select repositories** → choose your private sync repository.
    - Permissions: **Repository permissions → Contents: Read and write**.
+   - **⚠️ Set expiration to `1 year` (or `No expiration`).** The default is 30 days — if you forget to renew it, real-time sync silently stops working.
+
 2. **Google Apps Script:** Open [script.google.com](https://script.google.com/) → **New project**, replace the code with:
    ```javascript
-   const REPO = "YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO"; // e.g. "ploa33/withings2garmin"
-   const TOKEN = "github_pat_11A...";                    // Your Fine-Grained PAT from step 1
+   const REPO  = "YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO"; // e.g. "ploa33/withings2garmin"
+   const TOKEN = "github_pat_11A...";                      // Fine-Grained PAT from step 1
 
+   // doPost: called by Withings on every new weigh-in → triggers the GitHub Action.
    function doPost(e) {
      UrlFetchApp.fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
        method: "post",
-       headers: {
-         Authorization: `Bearer ${TOKEN}`,
-         Accept: "application/vnd.github+json"
-       },
+       headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" },
        payload: JSON.stringify({ event_type: "withings_sync" }),
        muteHttpExceptions: true,
      });
      return ContentService.createTextOutput("OK");
    }
 
+   // doGet: also handles the Withings OAuth callback during initial setup.
+   // If Withings redirects here with ?code=..., it forwards the code to the
+   // GitHub Action, which exchanges it automatically — zero copy-paste needed.
    function doGet(e) {
+     const code = e && e.parameter && e.parameter.code;
+     if (code) {
+       UrlFetchApp.fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
+         method: "post",
+         headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" },
+         payload: JSON.stringify({ event_type: "withings_sync", client_payload: { code } }),
+         muteHttpExceptions: true,
+       });
+       return ContentService.createTextOutput(
+         "✅ Withings authorized! Your GitHub Action will now exchange the code and sync. You can close this tab."
+       );
+     }
      return ContentService.createTextOutput("Withings2Garmin Webhook Relay Active");
    }
    ```
+
 3. **Deploy:** Click **Deploy → New deployment**:
    - Type: **Web app** (gear icon)
    - Execute as: **Me**
-   - Who has access: **Anyone** *(required so Withings servers can post to it)*
+   - Who has access: **Anyone** *(required so Withings servers can call it)*
    - Click **Deploy** and copy the **Web app URL** (`https://script.google.com/macros/s/.../exec`).
+
 4. **Secret:** In your private repo, add the URL as the **`WEBHOOK_URL`** secret.
 
 *That's it! On the next run, the action automatically registers this URL with Withings Notify API.*
+
+> **Bonus:** If you set your GAS URL as the **redirect URI** in your Withings developer app, the very first OAuth authorization will trigger the action automatically — no copy-paste of the `code=` needed at all.
+
 </details>
 
 ---

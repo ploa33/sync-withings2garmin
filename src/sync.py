@@ -14,6 +14,15 @@ Modes (W2G_MODE or CLI flag):
     sync      Fetch new Withings weigh-ins and upload them to Garmin (default)
     dry-run   Fetch and display weigh-ins, upload nothing        (--dry-run)
     simulate  Upload one FAKE weigh-in to Garmin to test the chain (--simulate)
+
+First-run / setup flow:
+    If no Withings token exists in state AND no WITHINGS_CODE is provided, the script
+    generates the Withings OAuth authorization URL, writes a step-by-step guide to
+    $GITHUB_STEP_SUMMARY, emits a ::warning annotation and exits 0 (no failure email).
+
+    When the user re-runs the workflow with a WITHINGS_CODE input, the script exchanges
+    it for tokens, saves them to the state branch immediately (before touching Garmin),
+    then proceeds with the normal sync.
 """
 
 from __future__ import annotations
@@ -39,6 +48,21 @@ SYNC_STATE_FILE = STATE_DIR / "sync_state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip()
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "") or 30)
 
+# ── OAuth setup inputs ────────────────────────────────────────────────────────
+# WITHINGS_CODE: one-shot authorization code from Withings (expires in 30s).
+# Only used during initial setup; after first exchange it is replaced by the
+# refresh_token persisted in the state branch.
+WITHINGS_CODE = os.environ.get("WITHINGS_CODE", "").strip()
+
+# Garmin MFA code (TOTP / email OTP). Only needed on first Garmin login if
+# the account has 2FA enabled.
+GARMIN_MFA_CODE = os.environ.get("GARMIN_MFA_CODE", "").strip()
+
+# redirect_uri used both to build the authorization URL and during the
+# code→token exchange. Must exactly match what is configured in the Withings
+# Developer Portal. Falls back to localhost:8080 for manual / local use.
+OAUTH_REDIRECT_URI = WEBHOOK_URL if WEBHOOK_URL else "http://localhost:8080"
+
 # Groups closer than this (seconds) belong to the same weigh-in (weight + impedance).
 SESSION_MERGE_WINDOW = 300
 
@@ -57,6 +81,13 @@ VALID_MODES = ("sync", "dry-run", "simulate")
 
 
 # ── GitHub Actions helpers (no-ops when run locally) ─────────────────────────
+
+def gh_warning(message: str) -> None:
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::warning title=Setup Required::{message}")
+    else:
+        print(f"⚠️  {message}")
+
 
 def gh_output(name: str, value: object) -> None:
     path = os.environ.get("GITHUB_OUTPUT")
@@ -81,12 +112,13 @@ def die(message: str) -> None:
 
 # ── Withings OAuth2 ───────────────────────────────────────────────────────────
 
-def load_withings_tokens() -> dict:
+def load_withings_tokens() -> dict | None:
     """
-    Load Withings tokens.
+    Load Withings tokens. Returns None when no token is available yet.
+
     Priority:
       1. tokens.json in the state directory (persisted by a previous run).
-      2. WITHINGS_REFRESH_TOKEN environment variable / secret (first run).
+      2. WITHINGS_REFRESH_TOKEN environment variable / secret (legacy fallback).
     """
     if TOKENS_FILE.exists():
         try:
@@ -98,11 +130,110 @@ def load_withings_tokens() -> dict:
             print("⚠️ Ignoring unreadable tokens.json")
 
     refresh_token = os.environ.get("WITHINGS_REFRESH_TOKEN", "").strip()
-    if not refresh_token:
-        die("No Withings refresh token found. Set the WITHINGS_REFRESH_TOKEN secret.")
+    if refresh_token:
+        print("🔑 Loaded Withings refresh token from secret (legacy / first run)")
+        return {"refresh_token": refresh_token}
 
-    print("🔑 Loaded Withings refresh token from secret (first run)")
-    return {"refresh_token": refresh_token}
+    return None  # First run — no token available yet
+
+
+def build_withings_auth_url(client_id: str) -> str:
+    """Build the Withings OAuth2 authorization URL with the correct redirect_uri."""
+    import urllib.parse
+    params = urllib.parse.urlencode({
+        "response_type": "code",
+        "client_id":     client_id,
+        "state":         "init",
+        "scope":         "user.metrics,user.info",
+        "redirect_uri":  OAUTH_REDIRECT_URI,
+    })
+    return f"https://account.withings.com/oauth2_user/authorize2?{params}"
+
+
+def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dict:
+    """
+    Exchange a one-shot authorization code for an access + refresh token pair.
+    The code expires in ~30s — this is called as early as possible in main().
+    """
+    print("🔄 Exchanging Withings authorization code for tokens…")
+    resp = requests.post(
+        f"{WITHINGS_API}/v2/oauth2",
+        data={
+            "action":        "requesttoken",
+            "grant_type":    "authorization_code",
+            "client_id":     client_id,
+            "client_secret": client_secret,
+            "code":          code,
+            "redirect_uri":  OAUTH_REDIRECT_URI,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get("status") != 0:
+        die(
+            f"Withings code exchange failed (status={body.get('status')}): "
+            f"{body.get('error', body)}. "
+            "Make sure you pasted the code quickly (it expires in ~30 seconds) "
+            "and that the redirect_uri in your Withings app matches exactly."
+        )
+    print("✅ Withings authorization code exchanged successfully")
+    return body["body"]
+
+
+def show_setup_guide(client_id: str) -> None:
+    """
+    Emit a ::warning annotation and write a step-by-step guide to
+    $GITHUB_STEP_SUMMARY so the user knows exactly what to do next.
+    Called on first run when neither a token nor a code is available.
+    """
+    auth_url = build_withings_auth_url(client_id)
+    redirect_note = (
+        f"`{OAUTH_REDIRECT_URI}` *(your WEBHOOK_URL)*"
+        if WEBHOOK_URL
+        else "`http://localhost:8080`"
+    )
+
+    gh_warning(
+        "No Withings token found. Follow the guide in the Job Summary below "
+        "to complete the one-time setup, then re-run this workflow."
+    )
+
+    guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
+
+No Withings token was found. Complete this **one-time setup** to authorise your account.
+
+> **⏱ Important — the code expires in ~30 seconds.**
+> Open the "Run workflow" panel **before** clicking the Withings link below,
+> so you can paste the code immediately without waiting.
+
+#### Step 1 — Open the Run workflow panel
+In the Actions tab, click **Run workflow** and expand the panel.
+You will see a **`withings_code`** field — keep it ready.
+
+#### Step 2 — Authorise your Withings account
+**[👉 Click here to authorise Withings]({auth_url})**
+
+Log in, approve the permissions, then look at your browser's address bar.
+You will be redirected to {redirect_note} — copy the value of `code=` from the URL.
+
+*Example URL: `{OAUTH_REDIRECT_URI}?code=`**abc123xyz**`&state=init`*
+
+#### Step 3 — Paste the code and re-run
+Back in the **Run workflow** panel, paste the code into the **`withings_code`** field
+and click **Run workflow**.
+
+The action will exchange it for tokens, save them securely to the state branch,
+and run your first sync automatically.
+
+---
+*After this first run, tokens rotate automatically — no manual action ever needed again.*
+"""
+    gh_summary(guide)
+    print("\n" + "=" * 60)
+    print("  ⚙️  SETUP REQUIRED — see the Job Summary tab for instructions")
+    print(f"  Auth URL: {auth_url}")
+    print("=" * 60 + "\n")
 
 
 def refresh_withings_token(
@@ -317,10 +448,27 @@ def save_last_synced_ts(ts: int) -> None:
 # ── Garmin Connect ────────────────────────────────────────────────────────────
 
 def get_garmin_client(email: str, password: str):
-    """Return an authenticated Garmin client using the persisted session."""
+    """Return an authenticated Garmin client using the persisted session.
+
+    If Garmin Connect requires 2-factor authentication (MFA):
+      - Returns GARMIN_MFA_CODE if provided by the user.
+      - If missing/empty, outputs a clear GitHub Actions error annotation and
+        exits with instructions to fill the 'garmin_mfa_code' input.
+    """
     import garminconnect  # imported lazily so dry-run / tests don't need it
 
-    garmin = garminconnect.Garmin(email, password)
+    def _handle_mfa() -> str:
+        if not GARMIN_MFA_CODE:
+            msg = (
+                "Garmin 2FA (MFA) is enabled on your account. "
+                "Re-run this workflow and provide your current verification code in the 'garmin_mfa_code' field."
+            )
+            print(f"::error title=Garmin MFA Required::{msg}")
+            sys.exit(1)
+        print("🔐 Using provided Garmin MFA code (TOTP/OTP)")
+        return GARMIN_MFA_CODE
+
+    garmin = garminconnect.Garmin(email, password, prompt_mfa=_handle_mfa)
     GARTH_SESSION_DIR.mkdir(parents=True, exist_ok=True)
     garmin.login(tokenstore=str(GARTH_SESSION_DIR))
     print("✅ Garmin login successful")
@@ -383,8 +531,32 @@ def main() -> None:
     if missing:
         die(f"Missing required secrets: {', '.join(missing)}")
 
+    # ── Step 0 — First-run setup: exchange WITHINGS_CODE immediately ──────────
+    # The Withings authorization code expires in ~30 seconds. Exchange it as the
+    # very first API call — before loading state, before touching Garmin — to
+    # maximise the chance of beating the expiry window.
+    if WITHINGS_CODE:
+        print("\n── Step 0 / 4 : Exchange Withings authorization code ──")
+        print("⏱  Code expires in ~30s — exchanging immediately…")
+        token_data = exchange_withings_code(
+            env["WITHINGS_CLIENT_ID"], env["WITHINGS_CLIENT_SECRET"], WITHINGS_CODE
+        )
+        # Persist tokens immediately, before touching Garmin.
+        # If Garmin fails (e.g. MFA required), the Withings token is already safe.
+        save_withings_tokens(token_data)
+        print("✅ Withings tokens saved to state (Withings setup complete)")
+
     # ── Step 1 — Withings OAuth2 ──────────────────────────────────────────────
     print("\n── Step 1 / 4 : Withings OAuth2 token ──")
+    tokens = load_withings_tokens()
+
+    if tokens is None:
+        # First run and no code provided: show the setup guide and exit cleanly.
+        # sys.exit(0) prevents GitHub from sending a "workflow failed" email.
+        show_setup_guide(env["WITHINGS_CLIENT_ID"])
+        gh_output("synced-count", 0)
+        sys.exit(0)
+
     access_token = get_withings_access_token(env["WITHINGS_CLIENT_ID"], env["WITHINGS_CLIENT_SECRET"])
     ensure_withings_webhook(access_token)
 
@@ -419,6 +591,8 @@ def main() -> None:
 
     # ── Step 3 — Garmin authentication ────────────────────────────────────────
     print("\n── Step 3 / 4 : Garmin Connect authentication ──")
+    if GARMIN_MFA_CODE:
+        print("🔐 Garmin MFA code provided via workflow input")
     garmin = get_garmin_client(env["GARMIN_EMAIL"], env["GARMIN_PASSWORD"])
 
     # ── Step 4 — Upload weigh-ins (oldest first, checkpoint after each) ───────

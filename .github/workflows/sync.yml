@@ -6,7 +6,10 @@
 name: "Withings → Garmin Sync"
 
 on:
-  # Real-time trigger from the optional webhook (see README)
+  # Real-time trigger from the optional webhook (see README).
+  # When using the Google Apps Script "all-in-one" setup (Option 2), the GAS
+  # can also pass a Withings authorization code here during initial setup via
+  # client_payload.code — the action will exchange it automatically.
   repository_dispatch:
     types: [withings_sync]
   # Safety net: 09:00 and 22:00 (Paris, summer time)
@@ -20,6 +23,20 @@ on:
         type: choice
         options: [sync, dry-run, simulate]
         default: sync
+      withings_code:
+        description: |
+          [Setup only] Paste the code= value from the Withings redirect URL here.
+          ⚠️ Open this panel BEFORE clicking the Withings auth link — the code expires in ~30 seconds.
+          Leave empty for normal sync runs.
+        required: false
+        default: ""
+      garmin_mfa_code:
+        description: |
+          [Setup only] Garmin Connect MFA code (TOTP / email OTP).
+          Only needed on first login if your Garmin account has 2FA enabled.
+          Leave empty for normal sync runs.
+        required: false
+        default: ""
 
 permissions:
   contents: write   # tokens & sync state are saved on the 'withings2garmin-state' branch
@@ -40,7 +57,11 @@ jobs:
           withings-client-id: ${{ secrets.WITHINGS_CLIENT_ID }}
           withings-client-secret: ${{ secrets.WITHINGS_CLIENT_SECRET }}
           withings-refresh-token: ${{ secrets.WITHINGS_REFRESH_TOKEN }}
+          # Pass the OAuth code from manual input OR from the GAS repository_dispatch
+          # payload (Option 2 — Google Apps Script all-in-one setup).
+          withings-code: ${{ inputs.withings_code || github.event.client_payload.code }}
           garmin-email: ${{ secrets.GARMIN_EMAIL }}
           garmin-password: ${{ secrets.GARMIN_PASSWORD }}
+          garmin-mfa-code: ${{ inputs.garmin_mfa_code }}
           webhook-url: ${{ secrets.WEBHOOK_URL }}
           mode: ${{ inputs.mode || 'sync' }}

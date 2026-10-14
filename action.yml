@@ -13,7 +13,14 @@ inputs:
     description: "Withings developer app Client Secret."
     required: true
   withings-refresh-token:
-    description: "Initial Withings OAuth refresh token. Only used on the first run (tokens then rotate inside the state branch)."
+    description: "Legacy: initial Withings OAuth refresh token. Only used on the first run if the new setup flow (withings-code) is not used."
+    required: false
+    default: ""
+  withings-code:
+    description: |
+      One-shot Withings OAuth authorization code (expires in ~30s).
+      Paste here during the initial setup run. After the first exchange,
+      tokens are persisted in the state branch automatically — never needed again.
     required: false
     default: ""
   garmin-email:
@@ -22,6 +29,13 @@ inputs:
   garmin-password:
     description: "Garmin Connect password."
     required: true
+  garmin-mfa-code:
+    description: |
+      Garmin Connect MFA / TOTP code. Only needed on the very first login
+      if your Garmin account has 2-factor authentication enabled.
+      After the first login the SSO session is persisted in the state branch.
+    required: false
+    default: ""
   webhook-url:
     description: "Optional public URL (e.g. Google Apps Script) that Withings calls on each weigh-in for real-time sync."
     required: false
@@ -62,7 +76,7 @@ runs:
 
     - name: "Install dependencies"
       shell: bash
-      run: python -m pip install --disable-pip-version-check --quiet -r "$GITHUB_ACTION_PATH/requirements.txt"
+      run: python -m pip install --disable-pip-version-check --no-compile --quiet -r "$GITHUB_ACTION_PATH/requirements.txt"
 
     - name: "Restore state"
       shell: bash
@@ -90,8 +104,10 @@ runs:
         WITHINGS_CLIENT_ID: ${{ inputs.withings-client-id }}
         WITHINGS_CLIENT_SECRET: ${{ inputs.withings-client-secret }}
         WITHINGS_REFRESH_TOKEN: ${{ inputs.withings-refresh-token }}
+        WITHINGS_CODE: ${{ inputs.withings-code }}
         GARMIN_EMAIL: ${{ inputs.garmin-email }}
         GARMIN_PASSWORD: ${{ inputs.garmin-password }}
+        GARMIN_MFA_CODE: ${{ inputs.garmin-mfa-code }}
         WEBHOOK_URL: ${{ inputs.webhook-url }}
         W2G_MODE: ${{ inputs.mode }}
         LOOKBACK_DAYS: ${{ inputs.lookback-days }}

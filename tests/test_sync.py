@@ -95,5 +95,42 @@ def test_invalid_mode_exits(sync, monkeypatch):
         sync.parse_args([])
 
 
+def test_load_withings_tokens_none_when_empty(sync, monkeypatch):
+    monkeypatch.delenv("WITHINGS_REFRESH_TOKEN", raising=False)
+    assert sync.load_withings_tokens() is None
+
+
+def test_build_withings_auth_url(sync):
+    url = sync.build_withings_auth_url("my_client_id")
+    assert "client_id=my_client_id" in url
+    assert "response_type=code" in url
+    assert "scope=user.metrics%2Cuser.info" in url
+    assert "redirect_uri=http%3A%2F%2Flocalhost%3A8080" in url
+
+
+def test_first_run_without_tokens_or_code_exits_cleanly(sync, monkeypatch):
+    monkeypatch.delenv("WITHINGS_REFRESH_TOKEN", raising=False)
+    monkeypatch.delenv("WITHINGS_CODE", raising=False)
+    monkeypatch.setenv("WITHINGS_CLIENT_ID", "dummy_id")
+    monkeypatch.setenv("WITHINGS_CLIENT_SECRET", "dummy_secret")
+    monkeypatch.setenv("GARMIN_EMAIL", "dummy@example.com")
+    monkeypatch.setenv("GARMIN_PASSWORD", "dummy_pass")
+
+    summaries = []
+    warnings = []
+    monkeypatch.setattr(sync, "gh_summary", lambda text: summaries.append(text))
+    monkeypatch.setattr(sync, "gh_warning", lambda text: warnings.append(text))
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync.main()
+
+    # Must exit 0 to prevent GitHub from sending failure notification emails
+    assert exc_info.value.code == 0
+    assert len(summaries) == 1
+    assert "Initial Setup Required" in summaries[0]
+    assert len(warnings) == 1
+    assert "No Withings token found" in warnings[0]
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__]))
