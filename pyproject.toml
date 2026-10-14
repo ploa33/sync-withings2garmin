@@ -1,0 +1,17 @@
+[project]
+name = "sync-withings2garmin"
+version = "1.0.0"
+description = "Sync Withings smart scale weigh-ins to Garmin Connect with GitHub Actions"
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "BLE", "S110"]
+ignore = ["E221", "E241"]  # aligned assignments / dict values are intentional
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

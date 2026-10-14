@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Withings → Garmin Connect sync
+#  This is the ONLY file your repository needs. The sync engine is loaded from
+#  ploa33/sync-withings2garmin@v1 and updates automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+name: "Withings → Garmin Sync"
+
+on:
+  # Real-time trigger from the optional webhook (see README)
+  repository_dispatch:
+    types: [withings_sync]
+  # Safety net: 09:00 and 22:00 (Paris, summer time)
+  schedule:
+    - cron: "0 7,20 * * *"
+  # Manual run from the Actions tab
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "sync = normal · dry-run = show only · simulate = upload a FAKE weigh-in"
+        type: choice
+        options: [sync, dry-run, simulate]
+        default: sync
+
+permissions:
+  contents: write   # tokens & sync state are saved on the 'withings2garmin-state' branch
+
+concurrency:
+  group: withings2garmin
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Never runs on the public template itself
+    if: github.repository != 'ploa33/sync-withings2garmin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: ploa33/sync-withings2garmin@v1
+        with:
+          withings-client-id: ${{ secrets.WITHINGS_CLIENT_ID }}
+          withings-client-secret: ${{ secrets.WITHINGS_CLIENT_SECRET }}
+          withings-refresh-token: ${{ secrets.WITHINGS_REFRESH_TOKEN }}
+          garmin-email: ${{ secrets.GARMIN_EMAIL }}
+          garmin-password: ${{ secrets.GARMIN_PASSWORD }}
+          webhook-url: ${{ secrets.WEBHOOK_URL }}
+          mode: ${{ inputs.mode || 'sync' }}

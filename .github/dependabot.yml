@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Proposes the upgrade when a new major version (e.g. @v2) is released
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

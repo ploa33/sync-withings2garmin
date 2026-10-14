@@ -1,0 +1,27 @@
+# Publishing a GitHub Release "vX.Y.Z" moves the floating major tag "vX" to it,
+# so every user referencing `ploa33/sync-withings2garmin@vX` gets the update
+# on their next run — no action needed on their side.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  move-major-tag:
+    if: github.repository == 'ploa33/sync-withings2garmin' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move major tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag must look like vX.Y.Z"; exit 1; }
+          MAJOR="${TAG%%.*}"
+          git tag -f "$MAJOR" "$TAG"
+          git push -f origin "refs/tags/$MAJOR"
+          echo "✅ $MAJOR → $TAG"

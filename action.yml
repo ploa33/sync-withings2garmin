@@ -1,0 +1,121 @@
+name: "Withings to Garmin Connect Sync"
+description: "Sync weigh-ins and body composition from any Withings smart scale to Garmin Connect. 100% GitHub Actions, no server."
+author: "ploa33"
+branding:
+  icon: "activity"
+  color: "green"
+
+inputs:
+  withings-client-id:
+    description: "Withings developer app Client ID."
+    required: true
+  withings-client-secret:
+    description: "Withings developer app Client Secret."
+    required: true
+  withings-refresh-token:
+    description: "Initial Withings OAuth refresh token. Only used on the first run (tokens then rotate inside the state branch)."
+    required: false
+    default: ""
+  garmin-email:
+    description: "Garmin Connect email."
+    required: true
+  garmin-password:
+    description: "Garmin Connect password."
+    required: true
+  webhook-url:
+    description: "Optional public URL (e.g. Google Apps Script) that Withings calls on each weigh-in for real-time sync."
+    required: false
+    default: ""
+  mode:
+    description: "sync (default) | dry-run (fetch only, upload nothing) | simulate (upload one FAKE weigh-in)."
+    required: false
+    default: "sync"
+  lookback-days:
+    description: "How many days back to look for weigh-ins not yet synced."
+    required: false
+    default: "30"
+  force-resync:
+    description: "Ignore the last-synced checkpoint and re-upload every weigh-in in the lookback window."
+    required: false
+    default: "false"
+  state-branch:
+    description: "Branch of your repository where tokens and sync state are stored (never merged into main)."
+    required: false
+    default: "withings2garmin-state"
+  github-token:
+    description: "Token used to read/write the state branch. Requires `contents: write`."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  synced-count:
+    description: "Number of weigh-ins uploaded to Garmin Connect during this run."
+    value: ${{ steps.sync.outputs.synced-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Set up Python"
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: "Install dependencies"
+      shell: bash
+      run: python -m pip install --disable-pip-version-check --quiet -r "$GITHUB_ACTION_PATH/requirements.txt"
+
+    - name: "Restore state"
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        STATE_BRANCH: ${{ inputs.state-branch }}
+      run: |
+        STATE_DIR="$RUNNER_TEMP/withings2garmin-state"
+        echo "W2G_STATE_DIR=$STATE_DIR" >> "$GITHUB_ENV"
+        REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        if git ls-remote --exit-code --heads "$REMOTE" "$STATE_BRANCH" >/dev/null 2>&1; then
+          git clone --quiet --depth 1 --branch "$STATE_BRANCH" "$REMOTE" "$STATE_DIR"
+          echo "📂 State restored from branch '$STATE_BRANCH'"
+        else
+          mkdir -p "$STATE_DIR"
+          git -C "$STATE_DIR" init --quiet
+          git -C "$STATE_DIR" remote add origin "$REMOTE"
+          echo "🆕 No state branch yet — first run"
+        fi
+
+    - name: "Sync Withings → Garmin"
+      id: sync
+      shell: bash
+      env:
+        WITHINGS_CLIENT_ID: ${{ inputs.withings-client-id }}
+        WITHINGS_CLIENT_SECRET: ${{ inputs.withings-client-secret }}
+        WITHINGS_REFRESH_TOKEN: ${{ inputs.withings-refresh-token }}
+        GARMIN_EMAIL: ${{ inputs.garmin-email }}
+        GARMIN_PASSWORD: ${{ inputs.garmin-password }}
+        WEBHOOK_URL: ${{ inputs.webhook-url }}
+        W2G_MODE: ${{ inputs.mode }}
+        LOOKBACK_DAYS: ${{ inputs.lookback-days }}
+        W2G_FORCE_RESYNC: ${{ inputs.force-resync }}
+      run: python "$GITHUB_ACTION_PATH/src/sync.py"
+
+    # Always runs: the Withings refresh token rotates on every refresh, so it must be
+    # saved even if a later step (e.g. the Garmin upload) failed.
+    - name: "Save state"
+      if: always()
+      shell: bash
+      env:
+        STATE_BRANCH: ${{ inputs.state-branch }}
+      run: |
+        cd "$W2G_STATE_DIR" 2>/dev/null || exit 0
+        git add -A
+        if git rev-parse --verify --quiet HEAD >/dev/null && git diff --cached --quiet HEAD; then
+          echo "State unchanged."
+          exit 0
+        fi
+        # Keep a single commit on the state branch: no token history accumulates.
+        git checkout --quiet --orphan _w2g_snapshot
+        git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "chore: withings2garmin state [skip ci]"
+        git push --quiet --force origin "_w2g_snapshot:refs/heads/$STATE_BRANCH"
+        echo "💾 State saved to branch '$STATE_BRANCH'"

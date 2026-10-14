@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Local runs: never commit credentials or session state
+tokens.json
+garth_session/
+sync_state.json
+.state/

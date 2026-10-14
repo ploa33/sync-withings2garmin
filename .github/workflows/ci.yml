@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Only in the upstream repo (not in copies made with "Use this template")
+    if: github.repository == 'ploa33/sync-withings2garmin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pytest ruff
+      - run: ruff check src tests
+      - run: pytest -q
+
+  actionlint:
+    if: github.repository == 'ploa33/sync-withings2garmin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
