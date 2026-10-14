@@ -54,30 +54,48 @@ Go to **Actions → Withings → Garmin Sync → Run workflow** (mode `dry-run` 
 
 ---
 
-## ⚡ Real-Time Webhook *(Optional)*
+## ⚡ Real-Time Sync (&lt; 30s) *(Optional)*
+
+By default, the workflow runs twice daily (09:00 & 22:00) as a safety net. To trigger a sync **instantly** when stepping off the scale:
 
 <details>
-<summary><b>Instant sync (&lt; 30s) via Google Apps Script</b></summary>
+<summary><b>Setup Google Apps Script Webhook Relay (2 min)</b></summary>
 
-1. Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new) with **Contents: Read and write** on your private repo.
-2. In [Google Apps Script](https://script.google.com/), paste:
+Withings sends a webhook when a new weigh-in occurs, and Google Apps Script acts as a free, serverless bridge to trigger your GitHub Actions workflow:
+
+1. **GitHub Token:** Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new):
+   - Repository access: **Only select repositories** → choose your private sync repository.
+   - Permissions: **Repository permissions → Contents: Read and write**.
+2. **Google Apps Script:** Open [script.google.com](https://script.google.com/) → **New project**, replace the code with:
    ```javascript
-   const REPO = "YOUR_USER/YOUR_PRIVATE_REPO";
-   const TOKEN = "github_pat_...";
+   const REPO = "YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO"; // e.g. "ploa33/withings2garmin"
+   const TOKEN = "github_pat_11A...";                    // Your Fine-Grained PAT from step 1
 
    function doPost(e) {
      UrlFetchApp.fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
        method: "post",
-       headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" },
+       headers: {
+         Authorization: `Bearer ${TOKEN}`,
+         Accept: "application/vnd.github+json"
+       },
        payload: JSON.stringify({ event_type: "withings_sync" }),
        muteHttpExceptions: true,
      });
      return ContentService.createTextOutput("OK");
    }
-   function doGet(e) { return ContentService.createTextOutput("Active"); }
+
+   function doGet(e) {
+     return ContentService.createTextOutput("Withings2Garmin Webhook Relay Active");
+   }
    ```
-3. **Deploy → Web app** (Access: *Anyone*).
-4. Save the URL as `WEBHOOK_URL` in your GitHub Secrets.
+3. **Deploy:** Click **Deploy → New deployment**:
+   - Type: **Web app** (gear icon)
+   - Execute as: **Me**
+   - Who has access: **Anyone** *(required so Withings servers can post to it)*
+   - Click **Deploy** and copy the **Web app URL** (`https://script.google.com/macros/s/.../exec`).
+4. **Secret:** In your private repo, add the URL as the **`WEBHOOK_URL`** secret.
+
+*That's it! On the next run, the action automatically registers this URL with Withings Notify API.*
 </details>
 
 ---
