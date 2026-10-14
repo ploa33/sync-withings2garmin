@@ -11,7 +11,7 @@ Sync weigh-ins and body metrics from any **Withings Scale** (Body, Body+, Smart,
 
 ---
 
-## 🚀 Setup (3 minutes)
+## Setup (5 minutes)
 
 ### 1. Create your private repo
 
