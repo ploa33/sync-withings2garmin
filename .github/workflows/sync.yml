@@ -42,7 +42,7 @@ permissions:
   contents: write   # tokens & sync state are saved on the 'withings2garmin-state' branch
 
 concurrency:
-  group: withings2garmin
+  group: withings2garmin-sync
   cancel-in-progress: false
 
 jobs:

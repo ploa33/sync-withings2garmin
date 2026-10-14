@@ -82,6 +82,16 @@ VALID_MODES = ("sync", "dry-run", "simulate")
 
 # ── GitHub Actions helpers (no-ops when run locally) ─────────────────────────
 
+def mask_token(val: str | None) -> None:
+    """Mask sensitive value from GitHub Actions logs."""
+    if val:
+        print(f"::add-mask::{val}")
+
+
+mask_secret = mask_token
+gh_mask = mask_token
+
+
 def gh_warning(message: str) -> None:
     if os.environ.get("GITHUB_ACTIONS"):
         print(f"::warning title=Setup Required::{message}")
@@ -124,6 +134,8 @@ def load_withings_tokens() -> dict | None:
         try:
             tokens = json.loads(TOKENS_FILE.read_text())
             if tokens.get("refresh_token"):
+                mask_secret(tokens.get("access_token"))
+                mask_secret(tokens.get("refresh_token"))
                 print("📂 Loaded Withings tokens from state")
                 return tokens
         except (OSError, ValueError):
@@ -131,6 +143,7 @@ def load_withings_tokens() -> dict | None:
 
     refresh_token = os.environ.get("WITHINGS_REFRESH_TOKEN", "").strip()
     if refresh_token:
+        mask_secret(refresh_token)
         print("🔑 Loaded Withings refresh token from secret (legacy / first run)")
         return {"refresh_token": refresh_token}
 
@@ -155,6 +168,7 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     Exchange a one-shot authorization code for an access + refresh token pair.
     The code expires in ~30s — this is called as early as possible in main().
     """
+    mask_token(code)
     print("🔄 Exchanging Withings authorization code for tokens…")
     resp = requests.post(
         f"{WITHINGS_API}/v2/oauth2",
@@ -178,7 +192,10 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
             "and that the redirect_uri in your Withings app matches exactly."
         )
     print("✅ Withings authorization code exchanged successfully")
-    return body["body"]
+    token_body = body["body"]
+    mask_secret(token_body.get("access_token"))
+    mask_secret(token_body.get("refresh_token"))
+    return token_body
 
 
 def show_setup_guide(client_id: str) -> None:
@@ -243,6 +260,7 @@ def refresh_withings_token(
     max_retries: int = 3,
 ) -> dict:
     """Exchange a refresh_token for a new access_token + refresh_token pair (retries on 601)."""
+    mask_token(refresh_token)
     for attempt in range(max_retries + 1):
         resp = requests.post(
             f"{WITHINGS_API}/v2/oauth2",
@@ -260,8 +278,11 @@ def refresh_withings_token(
         status = body.get("status")
 
         if status == 0:
+            token_body = body["body"]
+            mask_secret(token_body.get("access_token"))
+            mask_secret(token_body.get("refresh_token"))
             print("🔄 Withings access token refreshed successfully")
-            return body["body"]
+            return token_body
 
         # 601: Same arguments in less than 10 seconds (consecutive webhook calls)
         if status == 601 and attempt < max_retries:
@@ -279,6 +300,9 @@ def refresh_withings_token(
 
 def save_withings_tokens(token_data: dict) -> None:
     """Persist the refreshed Withings tokens and expiry timestamp to the state directory."""
+    mask_secret(token_data.get("access_token"))
+    mask_secret(token_data.get("refresh_token"))
+
     now_ts = int(time.time())
     expires_in = int(token_data.get("expires_in", 10800))
     expires_at = token_data.get("expires_at", now_ts + expires_in)
@@ -530,6 +554,11 @@ def main() -> None:
     missing = [name for name in required if not env[name]]
     if missing:
         die(f"Missing required secrets: {', '.join(missing)}")
+
+    if WITHINGS_CODE:
+        mask_secret(WITHINGS_CODE)
+    if GARMIN_MFA_CODE:
+        mask_secret(GARMIN_MFA_CODE)
 
     # ── Step 0 — First-run setup: exchange WITHINGS_CODE immediately ──────────
     # The Withings authorization code expires in ~30 seconds. Exchange it as the

@@ -139,6 +139,14 @@ flowchart LR
 
 ---
 
+## 🔒 Privacy & Self-Hosted
+
+- **100% Self-Hosted:** Everything runs inside your own private GitHub repository and GitHub-hosted Actions runners.
+- **Zero Third-Party Servers:** Your Garmin credentials, Withings tokens, and health metrics are never transmitted to any third-party backend, proxy, or database.
+- **Strictly Isolated State:** Tokens and SSO session cookies are saved exclusively inside your own private repository's `withings2garmin-state` branch.
+
+---
+
 ## ☕ Support
 If this saved you the cost of a Garmin Index scale, consider supporting the project:
 
@@ -146,3 +154,8 @@ If this saved you the cost of a Garmin Index scale, consider supporting the proj
 
 ## 📄 License
 [MIT](LICENSE)
+
+---
+
+## ⚖️ Legal Disclaimer
+This project is an independent open-source tool and is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Garmin Ltd., Withings S.A., or any of their subsidiaries or affiliates. All product and company names are trademarks™ or registered® trademarks of their respective holders.

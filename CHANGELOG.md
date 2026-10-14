@@ -12,6 +12,10 @@ users on `@v1` receive every `v1.x.y` automatically.
 - Google Apps Script all-in-one relay: supports both real-time weigh-in webhooks (`doPost`) and automatic zero-copy OAuth code dispatch (`doGet`).
 - Dynamic `redirect_uri`: automatically uses `WEBHOOK_URL` if defined, or falls back to `http://localhost:8080`.
 - Clean first-run exit (`sys.exit(0)`) with `::warning` annotation to prevent false-alarm failure emails.
+- Public repository guardrail: aborts run with error if the user accidentally created a public repo instead of private.
+- Token log masking: outputs `::add-mask::` on all OAuth tokens, codes, and MFA codes to prevent accidental leaks in Action logs.
+- Dedicated concurrency group (`withings2garmin-sync`) to serialize webhook and cron triggers.
+- Privacy & Self-Hosted section and Legal Disclaimer added to README.
 
 ## [1.0.0] - 2026-10-14
 

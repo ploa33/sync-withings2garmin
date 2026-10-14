@@ -69,6 +69,13 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: "Security check: private repository"
+      if: github.event.repository.private == false && github.repository != 'ploa33/sync-withings2garmin'
+      shell: bash
+      run: |
+        echo "::error title=Security Risk::Your repository is PUBLIC! Change it to PRIVATE in Settings before running."
+        exit 1
+
     - name: "Set up Python"
       uses: actions/setup-python@v7
       with:
