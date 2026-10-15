@@ -260,6 +260,13 @@
       document.getElementById('success-view').style.display = 'block';
       document.getElementById('code-display').innerText = code;
 
+      // Clean query string from browser address bar to keep history clean and avoid stale refreshes
+      try {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (e) {
+        // Ignored on sandboxed environments
+      }
+
       // Animate countdown bar (30 seconds)
       let timeLeft = 30;
       const progress = document.getElementById('timer-progress');

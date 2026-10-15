@@ -3,6 +3,13 @@
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/):
 users on `@v1` receive every `v1.x.y` automatically.
 
+## [1.2.1] - 2026-10-15
+
+### Added
+- Diagnostic secrets table in Job Summary: displays a clear status table (`✅ Configured` / `❌ Missing`) with direct clickable link to repository secrets if any are missing.
+- URL auto-cleanup in GitHub Pages callback (`docs/index.html`): removes query parameters from the browser address bar after reading to prevent stale refreshes and protect browser history.
+- Streamlined, minimalist README: redesigned into 4 rapid steps with collapsible advanced options.
+
 ## [1.2.0] - 2026-10-15
 
 ### Added

@@ -609,6 +609,23 @@ def main() -> None:
     required = names[:2] if mode == "dry-run" else names
     missing = [name for name in required if not env[name]]
     if missing:
+        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+        repo = os.environ.get("GITHUB_REPOSITORY", "").strip("/")
+        secrets_url = f"{server}/{repo}/settings/secrets/actions" if repo else ""
+        secrets_link = (
+            f"[👉 Click here to configure your secrets]({secrets_url})"
+            if secrets_url
+            else "Go to **Settings → Secrets and variables → Actions**"
+        )
+        rows = [f"| `{n}` | {'✅ Configured' if env[n] else '❌ **Missing**'} |" for n in required]
+        summary_table = (
+            "### ❌ Configuration Error — Missing Secrets\n\n"
+            "Some required repository secrets are not configured or empty:\n\n"
+            "| Secret | Status |\n|---|---|\n"
+            + "\n".join(rows)
+            + f"\n\n{secrets_link}\n"
+        )
+        gh_summary(summary_table)
         die(f"Missing required secrets: {', '.join(missing)}")
 
     code = extract_withings_code(WITHINGS_CODE)

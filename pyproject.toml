@@ -1,6 +1,6 @@
 [project]
 name = "sync-withings2garmin"
-version = "1.2.0"
+version = "1.2.1"
 description = "Sync Withings smart scale weigh-ins to Garmin Connect with GitHub Actions"
 requires-python = ">=3.10"
 license = "MIT"
