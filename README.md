@@ -15,8 +15,6 @@ Automatically sync weigh-ins and body metrics from any **Withings Scale** (Body,
 
 ### 1. Create your private repository
 
-Click below to generate your private repository from this template:
-
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/new?template_name=sync-withings2garmin&template_owner=ploa33)
 
 > [!IMPORTANT]
@@ -33,8 +31,6 @@ In the [Withings Developer Dashboard](https://developer.withings.com/dashboard/)
 | **Application Name** | `Withings to Garmin Sync` |
 | **Application Description** | `Scale sync to Garmin Connect` |
 | **Registered URLs** | `https://ploa33.github.io/sync-withings2garmin/` |
-
-*(You can also use `http://localhost:8080` — both URLs are supported).*
 
 Click **Done**, then keep your **Client ID** and **Consumer Secret** handy.
 
