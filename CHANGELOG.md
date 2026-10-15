@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/):
 users on `@v1` receive every `v1.x.y` automatically.
 
+## [1.3.0] - 2026-10-15
+
+### Added
+- **Universal Cloudflare Worker Relay (`relay/`)**: 100% serverless, zero-database companion relay for 1-click Withings OAuth authorization and instant real-time weigh-in sync without Google Apps Script.
+- **GitHub Actions OIDC Authentication**: secure repository identification via `id-token: write` and GitHub JWKS verification without needing user Personal Access Tokens.
+- **Early Garmin Pre-flight Validation**: verifies Garmin credentials and saves the session on Run 1 before presenting the Withings authorization link, failing fast on typos or MFA requirements.
+- **Biometric Health Privacy in Logs**: weight and body composition values are masked by default (`✓ recorded`) in console output and Job Summary, with optional `W2G_SHOW_METRICS=true` toggle.
+- **Automatic Webhook Lifecycle**: subscribes the signed relay webhook URL to Withings `/notify` automatically on first sync.
+
+### Fixed
+- **Withings Webhook Status Code 293**: properly treated as an error (failed HEAD probe validation) rather than active webhook, checking existing subscriptions with `action=list` first.
+
 ## [1.2.1] - 2026-10-15
 
 ### Added

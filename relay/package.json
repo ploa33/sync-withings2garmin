@@ -1,0 +1,16 @@
+{
+  "name": "withings-sync-relay",
+  "version": "1.0.0",
+  "description": "Universal stateless relay for Withings → Garmin Connect sync (OAuth + real-time webhooks)",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241004.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.80.0"
+  }
+}

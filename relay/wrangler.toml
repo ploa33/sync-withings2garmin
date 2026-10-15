@@ -1,0 +1,13 @@
+name = "withings-sync-relay"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+
+# Environment secrets to set in Cloudflare:
+# - GH_APP_ID: ID of your GitHub App (e.g. 123456)
+# - GH_APP_PRIVATE_KEY: PEM-encoded private key for your GitHub App
+# - HMAC_SECRET: Random secret string for HMAC-SHA256 signatures (at least 32 chars)
+#
+# Optional environment variables:
+# - GH_APP_SLUG: The URL slug of your GitHub App (default: "withings-to-garmin-sync")
+[vars]
+GH_APP_SLUG = "withings-to-garmin-sync"

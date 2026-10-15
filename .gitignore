@@ -9,3 +9,7 @@ tokens.json
 garth_session/
 sync_state.json
 .state/
+
+# Node / Cloudflare Workers
+node_modules/
+.wrangler/

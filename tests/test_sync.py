@@ -129,8 +129,10 @@ def test_first_run_without_tokens_or_code_exits_cleanly(sync, monkeypatch):
 
     summaries = []
     warnings = []
+    garmin_calls = []
     monkeypatch.setattr(sync, "gh_summary", lambda text: summaries.append(text))
     monkeypatch.setattr(sync, "gh_warning", lambda text: warnings.append(text))
+    monkeypatch.setattr(sync, "get_garmin_client", lambda e, p: garmin_calls.append((e, p)))
 
     with pytest.raises(SystemExit) as exc_info:
         sync.main()
@@ -141,6 +143,135 @@ def test_first_run_without_tokens_or_code_exits_cleanly(sync, monkeypatch):
     assert "Initial Setup Required" in summaries[0]
     assert len(warnings) == 1
     assert "No Withings token found" in warnings[0]
+    assert garmin_calls == [("dummy@example.com", "dummy_pass")]
+
+
+class _Resp:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+
+def _fake_notify(monkeypatch, sync, responses):
+    calls = []
+
+    def fake_post(url, data=None, **kwargs):
+        calls.append(data["action"])
+        return _Resp(responses[data["action"]])
+
+    monkeypatch.setattr(sync.requests, "post", fake_post)
+    return calls
+
+
+def test_webhook_status_293_is_reported_as_failure(sync, monkeypatch, capsys):
+    monkeypatch.setattr(sync, "WEBHOOK_URL", "https://example.com/hook")
+    calls = _fake_notify(monkeypatch, sync, {
+        "list": {"status": 0, "body": {"profiles": []}},
+        "subscribe": {"status": 293},
+    })
+    sync.ensure_withings_webhook("token")
+    out = capsys.readouterr().out
+    assert calls == ["list", "subscribe"]
+    assert "293" in out
+    assert "webhook active" not in out
+
+
+def test_webhook_already_subscribed_skips_subscribe(sync, monkeypatch, capsys):
+    monkeypatch.setattr(sync, "WEBHOOK_URL", "https://example.com/hook")
+    calls = _fake_notify(monkeypatch, sync, {
+        "list": {"status": 0, "body": {"profiles": [{"callbackurl": "https://example.com/hook"}]}},
+    })
+    sync.ensure_withings_webhook("token")
+    assert calls == ["list"]
+    assert "webhook active" in capsys.readouterr().out
+
+
+def test_health_metrics_masked_by_default(sync):
+    payload = {"weight": 75.0, "percent_fat": 15.0, "muscle_mass": 35.0, "percent_hydration": 55.0, "bone_mass": 3.0}
+    dt = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
+    cells_masked = sync.describe(dt, payload, show_values=False)
+    assert cells_masked[0] == "2026-10-15 12:00 UTC"
+    for cell in cells_masked[1:]:
+        assert cell == "✓ recorded"
+        assert "75" not in cell
+        assert "15" not in cell
+
+    cells_raw = sync.describe(dt, payload, show_values=True)
+    assert "75.0 kg" in cells_raw[1]
+    assert "15.0 %" in cells_raw[2]
+
+
+def test_get_github_oidc_token(sync, monkeypatch):
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://actions.local/token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "header_token")
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        assert headers["Authorization"] == "Bearer header_token"
+        assert params["audience"] == "withings-sync-relay"
+        return _Resp({"value": "jwt_oidc_value"})
+
+    monkeypatch.setattr(sync.requests, "get", fake_get)
+    assert sync.get_github_oidc_token() == "jwt_oidc_value"
+
+
+def test_relay_register_run1_and_run2(sync, monkeypatch):
+    monkeypatch.setattr(sync, "get_github_oidc_token", lambda: "oidc_jwt")
+
+    posts = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        assert headers["Authorization"] == "Bearer oidc_jwt"
+        posts.append(json)
+        if not json.get("withings_userid"):
+            return _Resp({"status": 0, "state": "signed_state_123", "installed": True})
+        return _Resp({"status": 0, "webhook_url": "https://relay.workers.dev/hook?sig=abc"})
+
+    class _RespWithStatus(_Resp):
+        def __init__(self, data, status_code=200):
+            super().__init__(data)
+            self.status_code = status_code
+
+    monkeypatch.setattr(sync.requests, "post", lambda u, **k: _RespWithStatus(
+        {"status": 0, "state": "signed_state_123", "installed": True}
+        if not (k.get("json") or {}).get("withings_userid")
+        else {"status": 0, "webhook_url": "https://relay.workers.dev/hook?sig=abc"}
+    ))
+
+    # Run 1: no userid
+    res1 = sync.relay_register("https://relay.workers.dev")
+    assert res1["state"] == "signed_state_123"
+    assert res1["installed"] is True
+
+    # Run 2: with userid
+    res2 = sync.relay_register("https://relay.workers.dev", withings_userid="98765")
+    assert res2["webhook_url"] == "https://relay.workers.dev/hook?sig=abc"
+
+
+def test_ensure_withings_webhook_uses_relay_when_configured(sync, monkeypatch, capsys):
+    monkeypatch.setattr(sync, "WEBHOOK_URL", "")
+    monkeypatch.setattr(sync, "RELAY_URL", "https://relay.workers.dev")
+    monkeypatch.setattr(sync, "relay_register", lambda u, withings_userid="": {
+        "webhook_url": f"https://relay.workers.dev/hook?u={withings_userid}&s=xyz"
+    })
+
+    calls = []
+
+    def fake_post(url, data=None, **kwargs):
+        calls.append(data["action"])
+        if data["action"] == "list":
+            return _Resp({"status": 0, "body": {"profiles": []}})
+        if data["action"] == "subscribe":
+            assert data["callbackurl"] == "https://relay.workers.dev/hook?u=12345&s=xyz"
+            return _Resp({"status": 0})
+        return _Resp({"status": -1})
+
+    monkeypatch.setattr(sync.requests, "post", fake_post)
+    sync.ensure_withings_webhook("token", userid="12345")
+    assert calls == ["list", "subscribe"]
+    assert "real-time webhook subscribed" in capsys.readouterr().out
 
 
 if __name__ == "__main__":

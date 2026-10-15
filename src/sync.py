@@ -46,7 +46,10 @@ GARTH_SESSION_DIR = STATE_DIR / "garth_session"
 SYNC_STATE_FILE = STATE_DIR / "sync_state.json"
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip()
+RELAY_URL = os.environ.get("RELAY_URL", "").strip().rstrip("/")
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "") or 30)
+SHOW_METRICS = os.environ.get("W2G_SHOW_METRICS", "").lower() in ("true", "1")
+DEFAULT_APP_SLUG = "withings-to-garmin-sync"
 
 # ── OAuth setup inputs ────────────────────────────────────────────────────────
 # WITHINGS_CODE: one-shot authorization code from Withings (expires in 30s).
@@ -64,6 +67,61 @@ GARMIN_MFA_CODE = os.environ.get("GARMIN_MFA_CODE", "").strip()
 PAGES_REDIRECT_URI = "https://ploa33.github.io/sync-withings2garmin/"
 LOCALHOST_REDIRECT_URI = "http://localhost:8080"
 OAUTH_REDIRECT_URI = os.environ.get("WITHINGS_REDIRECT_URI", "").strip() or PAGES_REDIRECT_URI
+
+
+def get_github_oidc_token(audience: str = "withings-sync-relay") -> str | None:
+    """Request a GitHub Actions OIDC ID token if available (requires permissions: id-token: write)."""
+    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not request_url or not request_token:
+        return None
+    try:
+        resp = requests.get(
+            request_url,
+            headers={"Authorization": f"Bearer {request_token}"},
+            params={"audience": audience},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            token = resp.json().get("value")
+            mask_secret(token)
+            return token
+    except (requests.RequestException, ValueError) as exc:
+        print(f"ℹ️ Could not obtain GitHub OIDC token: {exc}")
+    return None
+
+
+def relay_register(relay_url: str, withings_userid: str = "") -> dict | None:
+    """Call the relay's POST /register endpoint with GitHub Actions OIDC authentication.
+
+    At Run 1 (withings_userid=""): returns signed OAuth state + GitHub App installation status.
+    At Run 2 (withings_userid="12345"): returns signed webhook URL for Withings real-time sync.
+    Returns None on any error (graceful fallback to classic mode).
+    """
+    if not relay_url:
+        return None
+    oidc_token = get_github_oidc_token()
+    if not oidc_token:
+        return None
+    try:
+        payload = {}
+        if withings_userid:
+            payload["withings_userid"] = str(withings_userid)
+        resp = requests.post(
+            f"{relay_url}/register",
+            headers={
+                "Authorization": f"Bearer {oidc_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        print(f"ℹ️ Relay registration returned HTTP {resp.status_code}")
+    except (requests.RequestException, ValueError) as exc:
+        print(f"ℹ️ Relay registration skipped: {exc}")
+    return None
 
 
 def extract_withings_code(raw: str) -> str:
@@ -180,14 +238,19 @@ def _percent_encode_raw(s: str) -> str:
     return "".join(f"%{ord(c):02x}" for c in s)
 
 
-def build_withings_auth_url(client_id: str, redirect_uri: str | None = None) -> str:
+def build_withings_auth_url(
+    client_id: str,
+    redirect_uri: str | None = None,
+    state: str = "init",
+) -> str:
     """Build the Withings OAuth2 authorization URL with percent-encoded params to prevent secret scrubbing."""
     target_redirect = redirect_uri or OAUTH_REDIRECT_URI
     cid_encoded = _percent_encode_raw(client_id)
     redirect_encoded = _percent_encode_raw(target_redirect)
+    state_encoded = _percent_encode_raw(state)
     return (
         "https://account.withings.com/oauth2_user/authorize2?"
-        f"response_type=code&client_id={cid_encoded}&state=init&scope=user.metrics%2Cuser.info&redirect_uri={redirect_encoded}"
+        f"response_type=code&client_id={cid_encoded}&state={state_encoded}&scope=user.metrics%2Cuser.info&redirect_uri={redirect_encoded}"
     )
 
 
@@ -213,10 +276,11 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     resp.raise_for_status()
     body = resp.json()
 
-    # If primary redirect_uri failed, try fallbacks (localhost, GitHub Pages, or WEBHOOK_URL)
+    # If primary redirect_uri failed, try fallbacks (Relay, localhost, GitHub Pages, or WEBHOOK_URL)
     if body.get("status") != 0:
+        relay_oauth_uri = f"{RELAY_URL}/oauth" if RELAY_URL else ""
         fallbacks = [
-            uri for uri in [LOCALHOST_REDIRECT_URI, PAGES_REDIRECT_URI, WEBHOOK_URL]
+            uri for uri in [relay_oauth_uri, LOCALHOST_REDIRECT_URI, PAGES_REDIRECT_URI, WEBHOOK_URL]
             if uri and uri != OAUTH_REDIRECT_URI
         ]
         for fb_uri in fallbacks:
@@ -252,7 +316,7 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     return token_body
 
 
-def show_setup_guide(client_id: str) -> None:
+def show_setup_guide(client_id: str, relay_info: dict | None = None) -> None:
     """
     Emit a ::warning annotation and write a step-by-step guide to
     $GITHUB_STEP_SUMMARY with dynamic links to the user's repository.
@@ -274,7 +338,61 @@ def show_setup_guide(client_id: str) -> None:
         "to complete the one-time setup, then re-run this workflow."
     )
 
-    guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
+    if relay_info and relay_info.get("state") and RELAY_URL:
+        relay_redirect = f"{RELAY_URL}/oauth"
+        auth_url_relay = build_withings_auth_url(client_id, relay_redirect, state=relay_info["state"])
+        installed = relay_info.get("installed", False)
+        app_slug = relay_info.get("app_slug", DEFAULT_APP_SLUG)
+        install_url = f"https://github.com/apps/{app_slug}/installations/new"
+
+        if installed:
+            guide = f"""### ⚡ Withings → Garmin — 1-Click Setup
+
+No Withings token was found. The GitHub App is **already installed** on `{repo or 'your repository'}`!
+
+#### 🚀 Complete Setup (1 Click)
+**[👉 Click here to authorise Withings]({auth_url_relay})**
+
+Log in and approve permissions. That's it!
+🎉 The relay will automatically launch your first sync workflow within seconds and activate instant real-time sync.
+
+<details>
+<summary><b>🛠️ Manual Fallback (Without Relay)</b></summary>
+
+If you prefer to authorize manually without the relay:
+1. Open {workflow_link}
+2. **[Click here to authorise via GitHub Pages]({auth_url_pages})**
+3. Copy the code and paste it into `withings_code`.
+
+</details>
+"""
+        else:
+            guide = f"""### ⚡ Withings → Garmin — Quick Setup
+
+No Withings token was found. Follow these two quick steps to authorise your account:
+
+#### Step 1 — Install the GitHub App (10 seconds)
+**[👉 Click here to install the Withings Sync App]({install_url})**
+Select **Only select repositories** → choose `{repo or 'your repository'}` → click **Install**.
+
+#### Step 2 — Authorise your Withings account
+**[👉 Click here to authorise Withings]({auth_url_relay})**
+Log in and approve permissions.
+
+🎉 Once approved, your first sync will launch automatically and real-time weigh-in sync will be active!
+
+<details>
+<summary><b>🛠️ Manual Fallback (Without Relay)</b></summary>
+
+If you prefer not to install the GitHub App:
+1. Open {workflow_link}
+2. **[Click here to authorise via GitHub Pages]({auth_url_pages})**
+3. Copy the code, paste it into `withings_code`, and click **Run workflow**.
+
+</details>
+"""
+    else:
+        guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
 
 No Withings token was found. Complete this **one-time setup** to authorise your account.
 
@@ -395,22 +513,67 @@ def get_withings_access_token(client_id: str, client_secret: str) -> str:
     return token_data["access_token"]
 
 
-def ensure_withings_webhook(access_token: str) -> None:
-    """Subscribe the Withings Notify API to the real-time webhook proxy (if configured)."""
-    if not WEBHOOK_URL:
+def _webhook_warning(message: str) -> None:
+    """Visible (non-fatal) annotation: real-time sync is broken but scheduled sync still works."""
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::warning title=Real-time webhook::{message}")
+    else:
+        print(f"⚠️  {message}")
+
+
+def ensure_withings_webhook(access_token: str, userid: str = "") -> None:
+    """Subscribe the Withings Notify API to the real-time webhook proxy (if configured).
+
+    The existing subscription is checked first (action=list) so that Withings does not
+    re-validate the callback URL on every run. Withings status codes:
+      0   = OK
+      293 = callback URL absent or incorrect (failed the HEAD validation) → ERROR
+    """
+    target_webhook = WEBHOOK_URL
+    if not target_webhook and RELAY_URL and userid:
+        relay_data = relay_register(RELAY_URL, withings_userid=userid)
+        if relay_data and relay_data.get("webhook_url"):
+            target_webhook = relay_data["webhook_url"]
+            print("📡 Obtained signed real-time webhook URL from relay")
+
+    if not target_webhook:
         return
+    headers = {"Authorization": f"Bearer {access_token}"}
     try:
         resp = requests.post(
             f"{WITHINGS_API}/notify",
-            data={"action": "subscribe", "callbackurl": WEBHOOK_URL, "appli": 1},
-            headers={"Authorization": f"Bearer {access_token}"},
+            data={"action": "list", "appli": 1},
+            headers=headers,
             timeout=10,
         )
         data = resp.json()
-        if data.get("status") in (0, 293):
-            print("📡 Withings real-time webhook active")
+        if data.get("status") == 0:
+            profiles = (data.get("body") or {}).get("profiles") or []
+            if any(p.get("callbackurl") == target_webhook for p in profiles):
+                print("📡 Withings real-time webhook active")
+                return
+
+        resp = requests.post(
+            f"{WITHINGS_API}/notify",
+            data={"action": "subscribe", "callbackurl": target_webhook, "appli": 1},
+            headers=headers,
+            timeout=10,
+        )
+        data = resp.json()
+        status = data.get("status")
+        if status == 0:
+            print("📡 Withings real-time webhook subscribed")
+        elif status == 293:
+            _webhook_warning(
+                "Withings rejected callback URL (status 293: callback URL absent or incorrect). "
+                "The URL must be public HTTPS and answer HTTP 2xx to a HEAD/GET request. "
+                "Real-time sync is OFF — scheduled runs still work."
+            )
         else:
-            print(f"ℹ️ Withings webhook status: {data.get('status')} ({data.get('error', '')})")
+            _webhook_warning(
+                f"Withings webhook subscription failed (status={status}: {data.get('error', '')}). "
+                "Real-time sync is OFF — scheduled runs still work."
+            )
     except (requests.RequestException, ValueError) as exc:
         print(f"⚠️ Webhook subscription check skipped: {exc}")
 
@@ -564,11 +727,21 @@ PAYLOAD_COLUMNS = (
 )
 
 
-def describe(measure_dt: datetime, payload: dict) -> list[str]:
-    """Human-readable cells: date, weight, fat, muscle, water, bone."""
+def describe(measure_dt: datetime, payload: dict, show_values: bool = SHOW_METRICS) -> list[str]:
+    """Human-readable cells: date, weight, fat, muscle, water, bone.
+
+    Biometric values are masked by default to protect health privacy in GitHub Actions logs.
+    Set W2G_SHOW_METRICS=true to reveal raw values.
+    """
     cells = [measure_dt.strftime("%Y-%m-%d %H:%M UTC")]
     for key, unit in PAYLOAD_COLUMNS:
-        cells.append("--" if payload[key] is None else f"{payload[key]} {unit}")
+        val = payload.get(key)
+        if val is None:
+            cells.append("--")
+        elif show_values:
+            cells.append(f"{val} {unit}")
+        else:
+            cells.append("✓ recorded")
     return cells
 
 
@@ -654,14 +827,23 @@ def main() -> None:
     tokens = load_withings_tokens()
 
     if tokens is None:
-        # First run and no code provided: show the setup guide and exit cleanly.
-        # sys.exit(0) prevents GitHub from sending a "workflow failed" email.
-        show_setup_guide(env["WITHINGS_CLIENT_ID"])
+        # Pre-flight check: validate Garmin credentials early so the user catches
+        # typos or MFA requirements before attempting the Withings authorization.
+        if mode != "dry-run":
+            print("\n── Pre-flight check: Garmin Connect authentication ──")
+            get_garmin_client(env["GARMIN_EMAIL"], env["GARMIN_PASSWORD"])
+
+        # Attempt to register with the relay using GitHub Actions OIDC (Run 1)
+        relay_info = relay_register(RELAY_URL) if RELAY_URL else None
+
+        show_setup_guide(env["WITHINGS_CLIENT_ID"], relay_info=relay_info)
         gh_output("synced-count", 0)
         sys.exit(0)
 
     access_token = get_withings_access_token(env["WITHINGS_CLIENT_ID"], env["WITHINGS_CLIENT_SECRET"])
-    ensure_withings_webhook(access_token)
+    tokens = load_withings_tokens() or {}
+    userid = str(tokens.get("userid", ""))
+    ensure_withings_webhook(access_token, userid=userid)
 
     # ── Step 2 — Weigh-ins to sync ────────────────────────────────────────────
     last_synced_ts = 0 if force else load_last_synced_ts()

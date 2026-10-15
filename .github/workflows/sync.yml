@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: write   # tokens & sync state are saved on the 'withings2garmin-state' branch
+  id-token: write   # required for GitHub Actions OIDC authentication with the relay
 
 concurrency:
   group: withings2garmin-sync

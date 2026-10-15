@@ -40,6 +40,10 @@ inputs:
     description: "Optional public URL (e.g. Google Apps Script) that Withings calls on each weigh-in for real-time sync."
     required: false
     default: ""
+  relay-url:
+    description: "Optional URL of the Cloudflare Worker relay. Enables 1-click OAuth setup and automatic real-time sync."
+    required: false
+    default: "https://withings-sync-relay.workers.dev"
   mode:
     description: "sync (default) | dry-run (fetch only, upload nothing) | simulate (upload one FAKE weigh-in)."
     required: false
@@ -116,6 +120,7 @@ runs:
         GARMIN_PASSWORD: ${{ inputs.garmin-password }}
         GARMIN_MFA_CODE: ${{ inputs.garmin-mfa-code }}
         WEBHOOK_URL: ${{ inputs.webhook-url }}
+        RELAY_URL: ${{ inputs.relay-url }}
         W2G_MODE: ${{ inputs.mode }}
         LOOKBACK_DAYS: ${{ inputs.lookback-days }}
         W2G_FORCE_RESYNC: ${{ inputs.force-resync }}
