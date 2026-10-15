@@ -34,7 +34,6 @@ Click the button below to generate your private repository from this template:
      ```text
      http://localhost:8080
      ```
-     *(If you also set up the optional Google Apps Script relay for instant sync, click **Register another url** and add your Webhook URL here too).*
 3. Click **Done** to save.
 4. Keep your **Client ID** and **Consumer Secret** handy for the next step.
 
