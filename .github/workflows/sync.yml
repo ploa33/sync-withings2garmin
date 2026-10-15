@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: ploa33/sync-withings2garmin@v1
         with:
-          withings-client-id: ${{ secrets.WITHINGS_CLIENT_ID }}
+          withings-client-id: ${{ vars.WITHINGS_CLIENT_ID || secrets.WITHINGS_CLIENT_ID }}
           withings-client-secret: ${{ secrets.WITHINGS_CLIENT_SECRET }}
           withings-refresh-token: ${{ secrets.WITHINGS_REFRESH_TOKEN }}
           # Pass the OAuth code from manual input OR from the GAS repository_dispatch
@@ -63,5 +63,5 @@ jobs:
           garmin-email: ${{ secrets.GARMIN_EMAIL }}
           garmin-password: ${{ secrets.GARMIN_PASSWORD }}
           garmin-mfa-code: ${{ inputs.garmin_mfa_code }}
-          webhook-url: ${{ secrets.WEBHOOK_URL }}
+          webhook-url: ${{ vars.WEBHOOK_URL || secrets.WEBHOOK_URL }}
           mode: ${{ inputs.mode || 'sync' }}

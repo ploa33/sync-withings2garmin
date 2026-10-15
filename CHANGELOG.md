@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/):
 users on `@v1` receive every `v1.x.y` automatically.
 
+## [1.1.1] - 2026-10-15
+
+### Fixed
+- Prevent GitHub Actions secret scrubber from masking authorization URL parameters (`client_id` and `redirect_uri`) with `***` in the Job Summary. All parameters are now percent-encoded so the link works seamlessly in one click.
+- Automatic fallback to `http://localhost:8080` during code exchange if the primary `WEBHOOK_URL` redirect URI mismatch occurs.
+- Provide dual authorization links in Job Summary when `WEBHOOK_URL` is set, accommodating both Google Apps Script and `http://localhost:8080` configurations in Withings Developer Portal.
+- Support `vars.WITHINGS_CLIENT_ID` and `vars.WEBHOOK_URL` in addition to repository secrets.
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

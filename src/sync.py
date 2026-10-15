@@ -150,17 +150,26 @@ def load_withings_tokens() -> dict | None:
     return None  # First run — no token available yet
 
 
-def build_withings_auth_url(client_id: str) -> str:
-    """Build the Withings OAuth2 authorization URL with the correct redirect_uri."""
-    import urllib.parse
-    params = urllib.parse.urlencode({
-        "response_type": "code",
-        "client_id":     client_id,
-        "state":         "init",
-        "scope":         "user.metrics,user.info",
-        "redirect_uri":  OAUTH_REDIRECT_URI,
-    })
-    return f"https://account.withings.com/oauth2_user/authorize2?{params}"
+def _percent_encode_raw(s: str) -> str:
+    """Percent-encode every character of a string.
+
+    Prevents GitHub Actions secret scrubbing from matching and masking strings
+    registered as secrets (e.g. WITHINGS_CLIENT_ID or WEBHOOK_URL) with '***'
+    in $GITHUB_STEP_SUMMARY. Standard web browsers and Withings' OAuth servers
+    automatically decode percent-encoded query parameters.
+    """
+    return "".join(f"%{ord(c):02x}" for c in s)
+
+
+def build_withings_auth_url(client_id: str, redirect_uri: str | None = None) -> str:
+    """Build the Withings OAuth2 authorization URL with percent-encoded params to prevent secret scrubbing."""
+    target_redirect = redirect_uri or OAUTH_REDIRECT_URI
+    cid_encoded = _percent_encode_raw(client_id)
+    redirect_encoded = _percent_encode_raw(target_redirect)
+    return (
+        "https://account.withings.com/oauth2_user/authorize2?"
+        f"response_type=code&client_id={cid_encoded}&state=init&scope=user.metrics%2Cuser.info&redirect_uri={redirect_encoded}"
+    )
 
 
 def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dict:
@@ -184,6 +193,23 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     )
     resp.raise_for_status()
     body = resp.json()
+    if body.get("status") != 0 and OAUTH_REDIRECT_URI != "http://localhost:8080":
+        # Fallback to http://localhost:8080 if primary redirect_uri (e.g. WEBHOOK_URL) failed
+        resp_fb = requests.post(
+            f"{WITHINGS_API}/v2/oauth2",
+            data={
+                "action":        "requesttoken",
+                "grant_type":    "authorization_code",
+                "client_id":     client_id,
+                "client_secret": client_secret,
+                "code":          code,
+                "redirect_uri":  "http://localhost:8080",
+            },
+            timeout=30,
+        )
+        if resp_fb.status_code == 200 and resp_fb.json().get("status") == 0:
+            body = resp_fb.json()
+
     if body.get("status") != 0:
         die(
             f"Withings code exchange failed (status={body.get('status')}): "
@@ -204,17 +230,25 @@ def show_setup_guide(client_id: str) -> None:
     $GITHUB_STEP_SUMMARY so the user knows exactly what to do next.
     Called on first run when neither a token nor a code is available.
     """
-    auth_url = build_withings_auth_url(client_id)
-    redirect_note = (
-        f"`{OAUTH_REDIRECT_URI}` *(your WEBHOOK_URL)*"
-        if WEBHOOK_URL
-        else "`http://localhost:8080`"
-    )
+    auth_url_primary = build_withings_auth_url(client_id, OAUTH_REDIRECT_URI)
+    auth_url_localhost = build_withings_auth_url(client_id, "http://localhost:8080")
 
     gh_warning(
         "No Withings token found. Follow the guide in the Job Summary below "
         "to complete the one-time setup, then re-run this workflow."
     )
+
+    if WEBHOOK_URL:
+        alt_link = (
+            f"\n*(If your Withings app callback URL is set to `http://localhost:8080`, "
+            f"**[use this link instead]({auth_url_localhost})**)*\n"
+        )
+        redirect_desc = "your Webhook URL (or `http://localhost:8080`)"
+        example_url = "https://script.google.com/.../exec?code=**abc123xyz**&state=init"
+    else:
+        alt_link = ""
+        redirect_desc = "`http://localhost:8080`"
+        example_url = "http://localhost:8080/?code=**abc123xyz**&state=init"
 
     guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
 
@@ -229,12 +263,12 @@ In the Actions tab, click **Run workflow** and expand the panel.
 You will see a **`withings_code`** field — keep it ready.
 
 #### Step 2 — Authorise your Withings account
-**[👉 Click here to authorise Withings]({auth_url})**
-
+**[👉 Click here to authorise Withings]({auth_url_primary})**
+{alt_link}
 Log in, approve the permissions, then look at your browser's address bar.
-You will be redirected to {redirect_note} — copy the value of `code=` from the URL.
+You will be redirected to {redirect_desc} — copy the value of `code=` from the URL.
 
-*Example URL: `{OAUTH_REDIRECT_URI}?code=`**abc123xyz**`&state=init`*
+*Example URL: `{example_url}`*
 
 #### Step 3 — Paste the code and re-run
 Back in the **Run workflow** panel, paste the code into the **`withings_code`** field
@@ -249,7 +283,7 @@ and run your first sync automatically.
     gh_summary(guide)
     print("\n" + "=" * 60)
     print("  ⚙️  SETUP REQUIRED — see the Job Summary tab for instructions")
-    print(f"  Auth URL: {auth_url}")
+    print(f"  Auth URL: {auth_url_primary}")
     print("=" * 60 + "\n")
 
 

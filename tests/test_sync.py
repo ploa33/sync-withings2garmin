@@ -101,11 +101,15 @@ def test_load_withings_tokens_none_when_empty(sync, monkeypatch):
 
 
 def test_build_withings_auth_url(sync):
+    import urllib.parse
     url = sync.build_withings_auth_url("my_client_id")
-    assert "client_id=my_client_id" in url
-    assert "response_type=code" in url
-    assert "scope=user.metrics%2Cuser.info" in url
-    assert "redirect_uri=http%3A%2F%2Flocalhost%3A8080" in url
+    qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert qs["client_id"] == ["my_client_id"]
+    assert qs["response_type"] == ["code"]
+    assert qs["scope"] == ["user.metrics,user.info"]
+    assert qs["redirect_uri"] == ["http://localhost:8080"]
+    # Raw secret string must NOT be present literally in the URL (avoids GitHub Actions secret scrubbing)
+    assert "my_client_id" not in url
 
 
 def test_first_run_without_tokens_or_code_exits_cleanly(sync, monkeypatch):
