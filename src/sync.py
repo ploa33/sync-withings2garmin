@@ -59,9 +59,9 @@ WITHINGS_CODE = os.environ.get("WITHINGS_CODE", "").strip()
 GARMIN_MFA_CODE = os.environ.get("GARMIN_MFA_CODE", "").strip()
 
 # redirect_uri used both to build the authorization URL and during the
-# code→token exchange. Must exactly match what is configured in the Withings
-# Developer Portal. Falls back to localhost:8080 for manual / local use.
-OAUTH_REDIRECT_URI = WEBHOOK_URL if WEBHOOK_URL else "http://localhost:8080"
+# code→token exchange. Defaults to http://localhost:8080 (standard Withings Developer
+# Portal callback). Can be overridden via WITHINGS_REDIRECT_URI if using a custom callback.
+OAUTH_REDIRECT_URI = os.environ.get("WITHINGS_REDIRECT_URI", "").strip() or "http://localhost:8080"
 
 # Groups closer than this (seconds) belong to the same weigh-in (weight + impedance).
 SESSION_MERGE_WINDOW = 300
@@ -193,8 +193,8 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     )
     resp.raise_for_status()
     body = resp.json()
-    if body.get("status") != 0 and OAUTH_REDIRECT_URI != "http://localhost:8080":
-        # Fallback to http://localhost:8080 if primary redirect_uri (e.g. WEBHOOK_URL) failed
+    if body.get("status") != 0 and WEBHOOK_URL and OAUTH_REDIRECT_URI != WEBHOOK_URL:
+        # Fallback to WEBHOOK_URL if primary redirect_uri (http://localhost:8080) failed
         resp_fb = requests.post(
             f"{WITHINGS_API}/v2/oauth2",
             data={
@@ -203,7 +203,7 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
                 "client_id":     client_id,
                 "client_secret": client_secret,
                 "code":          code,
-                "redirect_uri":  "http://localhost:8080",
+                "redirect_uri":  WEBHOOK_URL,
             },
             timeout=30,
         )
@@ -230,8 +230,8 @@ def show_setup_guide(client_id: str) -> None:
     $GITHUB_STEP_SUMMARY so the user knows exactly what to do next.
     Called on first run when neither a token nor a code is available.
     """
-    auth_url_primary = build_withings_auth_url(client_id, OAUTH_REDIRECT_URI)
-    auth_url_localhost = build_withings_auth_url(client_id, "http://localhost:8080")
+    auth_url_default = build_withings_auth_url(client_id, "http://localhost:8080")
+    auth_url_webhook = build_withings_auth_url(client_id, WEBHOOK_URL) if WEBHOOK_URL else ""
 
     gh_warning(
         "No Withings token found. Follow the guide in the Job Summary below "
@@ -240,15 +240,11 @@ def show_setup_guide(client_id: str) -> None:
 
     if WEBHOOK_URL:
         alt_link = (
-            f"\n*(If your Withings app callback URL is set to `http://localhost:8080`, "
-            f"**[use this link instead]({auth_url_localhost})**)*\n"
+            f"\n> 💡 *Note: If you configured your Google Apps Script URL as Callback URL "
+            f"in Withings Developer Portal, **[use this link instead]({auth_url_webhook})**.*\n"
         )
-        redirect_desc = "your Webhook URL (or `http://localhost:8080`)"
-        example_url = "https://script.google.com/.../exec?code=**abc123xyz**&state=init"
     else:
         alt_link = ""
-        redirect_desc = "`http://localhost:8080`"
-        example_url = "http://localhost:8080/?code=**abc123xyz**&state=init"
 
     guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
 
@@ -263,12 +259,12 @@ In the Actions tab, click **Run workflow** and expand the panel.
 You will see a **`withings_code`** field — keep it ready.
 
 #### Step 2 — Authorise your Withings account
-**[👉 Click here to authorise Withings]({auth_url_primary})**
+**[👉 Click here to authorise Withings]({auth_url_default})**
 {alt_link}
 Log in, approve the permissions, then look at your browser's address bar.
-You will be redirected to {redirect_desc} — copy the value of `code=` from the URL.
+You will be redirected to `http://localhost:8080` — copy the value of `code=` from the URL.
 
-*Example URL: `{example_url}`*
+*Example URL: `http://localhost:8080/?code=`**abc123xyz**`&state=init`*
 
 #### Step 3 — Paste the code and re-run
 Back in the **Run workflow** panel, paste the code into the **`withings_code`** field
@@ -283,7 +279,7 @@ and run your first sync automatically.
     gh_summary(guide)
     print("\n" + "=" * 60)
     print("  ⚙️  SETUP REQUIRED — see the Job Summary tab for instructions")
-    print(f"  Auth URL: {auth_url_primary}")
+    print(f"  Auth URL: {auth_url_default}")
     print("=" * 60 + "\n")
 
 

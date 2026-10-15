@@ -39,6 +39,23 @@ In your newly created repository, navigate to **Settings → Secrets and variabl
 > [!NOTE]
 > **No manual token generation or curl command required.** The action handles the entire OAuth authorization flow automatically in the next step.
 
+<details>
+<summary><b>📖 How to get your Withings Client ID & Secret (1 minute)</b></summary>
+
+1. Log in to the [Withings Developer Dashboard](https://developer.withings.com/dashboard/) with your personal Withings account.
+2. Click **Create an application** (or edit your existing app):
+   * **Application name:** `Withings to Garmin Sync` (or any name you prefer)
+   * **Application description:** `Sync scale weigh-ins to Garmin Connect`
+   * **Registered URLs:** Enter:
+     ```text
+     http://localhost:8080
+     ```
+     *(If you also use the optional Google Apps Script relay for instant sync, click **Register another url** and add your Webhook URL here too).*
+3. Click **Done** to save.
+4. Copy your **Client ID** and **Consumer Secret** into your GitHub repository secrets (`WITHINGS_CLIENT_ID` and `WITHINGS_CLIENT_SECRET`).
+
+</details>
+
 ---
 
 ### 3. First Run — Authorize Withings (No terminal needed)
