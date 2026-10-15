@@ -74,21 +74,26 @@ If your Garmin account has two-factor authentication enabled:
 
 By default, the workflow runs twice daily (**09:00 & 22:00**). To upload weigh-ins **instantly** when stepping off your scale:
 
-1. **GitHub Token:** Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new) with **Contents: Read and write** permissions on your private sync repository.
+1. **GitHub Token:** Create a [Fine-Grained PAT](https://github.com/settings/personal-access-tokens/new) (1-year expiration, **Contents: Read & write** on your private sync repo) or a [Classic PAT](https://github.com/settings/tokens/new) with the `repo` scope.
 2. **Google Apps Script:** Open [script.google.com](https://script.google.com/) → **New project**, paste:
 
 ```javascript
 const REPO  = "YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO"; // e.g. "octocat/my-sync"
-const TOKEN = "github_pat_11A...";                      // Fine-Grained PAT
+const TOKEN = "ghp_... or github_pat_...";
 
 function doPost(e) {
-  UrlFetchApp.fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
+  const resp = UrlFetchApp.fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
     method: "post",
     headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" },
     payload: JSON.stringify({ event_type: "withings_sync" }),
     muteHttpExceptions: true,
   });
+  console.log("GitHub API Status: " + resp.getResponseCode());
   return ContentService.createTextOutput("OK");
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput("Withings Webhook Active");
 }
 ```
 
@@ -96,6 +101,9 @@ function doPost(e) {
 4. **Secret:** Add the deployed URL as **`WEBHOOK_URL`** in your repository's GitHub Secrets.
 
 The workflow registers this webhook with Withings automatically on the next run!
+
+> [!TIP]
+> If you ever update the script or token later, always go to **Deploy → Manage deployments → Edit ✏️ → Version: New version → Deploy** to publish your changes.
 
 </details>
 
