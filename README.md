@@ -27,13 +27,17 @@ Click the button below to generate your private repository from this template:
 ### 2. Get your Withings API credentials (1 minute)
 
 1. Log in to the [Withings Developer Dashboard](https://developer.withings.com/dashboard/) with your personal Withings account.
-2. Click **Create an application** (or edit your existing app):
-   * **Application name:** `Withings to Garmin Sync` (or any name you prefer)
-   * **Application description:** `Sync scale weigh-ins to Garmin Connect`
-   * **Registered URLs:** Enter:
-     ```text
-     http://localhost:8080
-     ```
+2. Click **Create an application** (or edit your existing app) and fill in the fields:
+
+   | Field on Withings Developer | Value to enter |
+   |---|---|
+   | **Application Name** | `Withings to Garmin Sync` |
+   | **Application Description** | `Sync scale weigh-ins to Garmin Connect` |
+   | **Registered URLs** | `https://ploa33.github.io/sync-withings2garmin/` |
+
+   > [!TIP]
+   > You can also enter `http://localhost:8080` if you prefer localhost. Both URLs are fully supported!
+
 3. Click **Done** to save.
 4. Keep your **Client ID** and **Consumer Secret** handy for the next step.
 

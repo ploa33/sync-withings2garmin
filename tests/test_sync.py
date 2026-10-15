@@ -107,9 +107,16 @@ def test_build_withings_auth_url(sync):
     assert qs["client_id"] == ["my_client_id"]
     assert qs["response_type"] == ["code"]
     assert qs["scope"] == ["user.metrics,user.info"]
-    assert qs["redirect_uri"] == ["http://localhost:8080"]
+    assert "ploa33.github.io" in qs["redirect_uri"][0]
     # Raw secret string must NOT be present literally in the URL (avoids GitHub Actions secret scrubbing)
     assert "my_client_id" not in url
+
+
+def test_extract_withings_code(sync):
+    assert sync.extract_withings_code("abc123xyz") == "abc123xyz"
+    assert sync.extract_withings_code("http://localhost:8080/?code=abc123xyz&state=init") == "abc123xyz"
+    assert sync.extract_withings_code("https://ploa33.github.io/sync-withings2garmin/?code=abc123xyz") == "abc123xyz"
+    assert sync.extract_withings_code("  my_code_only  ") == "my_code_only"
 
 
 def test_first_run_without_tokens_or_code_exits_cleanly(sync, monkeypatch):

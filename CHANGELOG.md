@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/):
 users on `@v1` receive every `v1.x.y` automatically.
 
+## [1.2.0] - 2026-10-15
+
+### Added
+- Official GitHub Pages 1-click callback helper (`docs/index.html`): displays a clean, client-side confirmation page with a single-click "Copy Code" button and 30-second expiry timer.
+- Dynamic repository links in Job Summary: automatically deep-links users directly to their own repository's "Run workflow" panel via `$GITHUB_SERVER_URL/$GITHUB_REPOSITORY`.
+- Smart code extractor: `withings_code` input now accepts full redirect URLs (e.g. copied from browser address bar) as well as raw code strings.
+- Markdown configuration table in README for Withings Developer Dashboard setup.
+
 ## [1.1.1] - 2026-10-15
 
 ### Fixed

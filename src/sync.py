@@ -59,9 +59,28 @@ WITHINGS_CODE = os.environ.get("WITHINGS_CODE", "").strip()
 GARMIN_MFA_CODE = os.environ.get("GARMIN_MFA_CODE", "").strip()
 
 # redirect_uri used both to build the authorization URL and during the
-# code→token exchange. Defaults to http://localhost:8080 (standard Withings Developer
-# Portal callback). Can be overridden via WITHINGS_REDIRECT_URI if using a custom callback.
-OAUTH_REDIRECT_URI = os.environ.get("WITHINGS_REDIRECT_URI", "").strip() or "http://localhost:8080"
+# code→token exchange. Defaults to GitHub Pages callback helper, with localhost:8080
+# as an automatic fallback.
+PAGES_REDIRECT_URI = "https://ploa33.github.io/sync-withings2garmin/"
+LOCALHOST_REDIRECT_URI = "http://localhost:8080"
+OAUTH_REDIRECT_URI = os.environ.get("WITHINGS_REDIRECT_URI", "").strip() or PAGES_REDIRECT_URI
+
+
+def extract_withings_code(raw: str) -> str:
+    """Extract authorization code from either a raw code string or a full redirect URL."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if "code=" in raw or raw.startswith(("http://", "https://")):
+        import urllib.parse
+        try:
+            parsed = urllib.parse.urlparse(raw)
+            qs = urllib.parse.parse_qs(parsed.query)
+            if "code" in qs and qs["code"]:
+                return qs["code"][0].strip()
+        except (ValueError, KeyError, AttributeError):
+            return raw
+    return raw
 
 # Groups closer than this (seconds) belong to the same weigh-in (weight + impedance).
 SESSION_MERGE_WINDOW = 300
@@ -193,22 +212,31 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     )
     resp.raise_for_status()
     body = resp.json()
-    if body.get("status") != 0 and WEBHOOK_URL and OAUTH_REDIRECT_URI != WEBHOOK_URL:
-        # Fallback to WEBHOOK_URL if primary redirect_uri (http://localhost:8080) failed
-        resp_fb = requests.post(
-            f"{WITHINGS_API}/v2/oauth2",
-            data={
-                "action":        "requesttoken",
-                "grant_type":    "authorization_code",
-                "client_id":     client_id,
-                "client_secret": client_secret,
-                "code":          code,
-                "redirect_uri":  WEBHOOK_URL,
-            },
-            timeout=30,
-        )
-        if resp_fb.status_code == 200 and resp_fb.json().get("status") == 0:
-            body = resp_fb.json()
+
+    # If primary redirect_uri failed, try fallbacks (localhost, GitHub Pages, or WEBHOOK_URL)
+    if body.get("status") != 0:
+        fallbacks = [
+            uri for uri in [LOCALHOST_REDIRECT_URI, PAGES_REDIRECT_URI, WEBHOOK_URL]
+            if uri and uri != OAUTH_REDIRECT_URI
+        ]
+        for fb_uri in fallbacks:
+            if body.get("status") == 0:
+                break
+            resp_fb = requests.post(
+                f"{WITHINGS_API}/v2/oauth2",
+                data={
+                    "action":        "requesttoken",
+                    "grant_type":    "authorization_code",
+                    "client_id":     client_id,
+                    "client_secret": client_secret,
+                    "code":          code,
+                    "redirect_uri":  fb_uri,
+                },
+                timeout=30,
+            )
+            if resp_fb.status_code == 200 and resp_fb.json().get("status") == 0:
+                body = resp_fb.json()
+                break
 
     if body.get("status") != 0:
         die(
@@ -227,24 +255,24 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
 def show_setup_guide(client_id: str) -> None:
     """
     Emit a ::warning annotation and write a step-by-step guide to
-    $GITHUB_STEP_SUMMARY so the user knows exactly what to do next.
-    Called on first run when neither a token nor a code is available.
+    $GITHUB_STEP_SUMMARY with dynamic links to the user's repository.
     """
-    auth_url_default = build_withings_auth_url(client_id, "http://localhost:8080")
-    auth_url_webhook = build_withings_auth_url(client_id, WEBHOOK_URL) if WEBHOOK_URL else ""
+    auth_url_pages = build_withings_auth_url(client_id, PAGES_REDIRECT_URI)
+    auth_url_localhost = build_withings_auth_url(client_id, LOCALHOST_REDIRECT_URI)
+
+    server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip("/")
+    workflow_url = f"{server}/{repo}/actions/workflows/sync.yml" if repo else ""
+    workflow_link = (
+        f"[👉 Open the 'Run workflow' panel on your repository]({workflow_url})"
+        if workflow_url
+        else "Go to **Actions → Withings → Garmin Sync → Run workflow**"
+    )
 
     gh_warning(
         "No Withings token found. Follow the guide in the Job Summary below "
         "to complete the one-time setup, then re-run this workflow."
     )
-
-    if WEBHOOK_URL:
-        alt_link = (
-            f"\n> 💡 *Note: If you configured your Google Apps Script URL as Callback URL "
-            f"in Withings Developer Portal, **[use this link instead]({auth_url_webhook})**.*\n"
-        )
-    else:
-        alt_link = ""
 
     guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
 
@@ -254,24 +282,22 @@ No Withings token was found. Complete this **one-time setup** to authorise your 
 > Open the "Run workflow" panel **before** clicking the Withings link below,
 > so you can paste the code immediately without waiting.
 
-#### Step 1 — Open the Run workflow panel
-In the Actions tab, click **Run workflow** and expand the panel.
-You will see a **`withings_code`** field — keep it ready.
+#### Step 1 — Keep the Run workflow panel ready
+Open your workflow in another browser tab so you are ready to paste the code:
+* {workflow_link}
 
 #### Step 2 — Authorise your Withings account
-**[👉 Click here to authorise Withings]({auth_url_default})**
-{alt_link}
-Log in, approve the permissions, then look at your browser's address bar.
-You will be redirected to `http://localhost:8080` — copy the value of `code=` from the URL.
+**[👉 Click here to authorise Withings]({auth_url_pages})**
 
-*Example URL: `http://localhost:8080/?code=`**abc123xyz**`&state=init`*
+Log in, approve permissions, and click the **📋 Copy Code** button on the confirmation page.
+
+*(If your Withings app is configured with `http://localhost:8080`, **[use this link instead]({auth_url_localhost})**)*
 
 #### Step 3 — Paste the code and re-run
-Back in the **Run workflow** panel, paste the code into the **`withings_code`** field
-and click **Run workflow**.
+In your **Run workflow** panel ({workflow_link}),
+paste the code into the **`withings_code`** field and click **Run workflow**.
 
-The action will exchange it for tokens, save them securely to the state branch,
-and run your first sync automatically.
+The action will exchange it for tokens, save them securely to the state branch, and run your first sync automatically.
 
 ---
 *After this first run, tokens rotate automatically — no manual action ever needed again.*
@@ -279,7 +305,7 @@ and run your first sync automatically.
     gh_summary(guide)
     print("\n" + "=" * 60)
     print("  ⚙️  SETUP REQUIRED — see the Job Summary tab for instructions")
-    print(f"  Auth URL: {auth_url_default}")
+    print(f"  Auth URL: {auth_url_pages}")
     print("=" * 60 + "\n")
 
 
@@ -585,8 +611,9 @@ def main() -> None:
     if missing:
         die(f"Missing required secrets: {', '.join(missing)}")
 
-    if WITHINGS_CODE:
-        mask_secret(WITHINGS_CODE)
+    code = extract_withings_code(WITHINGS_CODE)
+    if code:
+        mask_secret(code)
     if GARMIN_MFA_CODE:
         mask_secret(GARMIN_MFA_CODE)
 
@@ -594,11 +621,11 @@ def main() -> None:
     # The Withings authorization code expires in ~30 seconds. Exchange it as the
     # very first API call — before loading state, before touching Garmin — to
     # maximise the chance of beating the expiry window.
-    if WITHINGS_CODE:
+    if code:
         print("\n── Step 0 / 4 : Exchange Withings authorization code ──")
         print("⏱  Code expires in ~30s — exchanging immediately…")
         token_data = exchange_withings_code(
-            env["WITHINGS_CLIENT_ID"], env["WITHINGS_CLIENT_SECRET"], WITHINGS_CODE
+            env["WITHINGS_CLIENT_ID"], env["WITHINGS_CLIENT_SECRET"], code
         )
         # Persist tokens immediately, before touching Garmin.
         # If Garmin fails (e.g. MFA required), the Withings token is already safe.
