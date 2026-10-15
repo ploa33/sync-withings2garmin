@@ -24,23 +24,7 @@ Click the button below to generate your private repository from this template:
 
 ---
 
-### 2. Configure GitHub Secrets
-
-In your newly created repository, navigate to **Settings → Secrets and variables → Actions** and add the following repository secrets:
-
-| Secret | Description | Where to find it |
-|---|---|---|
-| `GARMIN_EMAIL` | Garmin Connect account email | Your Garmin login |
-| `GARMIN_PASSWORD` | Garmin Connect account password | Your Garmin login |
-| `WITHINGS_CLIENT_ID` | Withings developer application Client ID | [Withings Developer Dashboard](https://developer.withings.com/dashboard/) |
-| `WITHINGS_CLIENT_SECRET` | Withings developer application Client Secret | [Withings Developer Dashboard](https://developer.withings.com/dashboard/) |
-| `WEBHOOK_URL` | *(Optional)* Google Apps Script URL for instant sync | See [Real-Time Sync](#-real-time-sync-optional) below |
-
-> [!NOTE]
-> **No manual token generation or curl command required.** The action handles the entire OAuth authorization flow automatically in the next step.
-
-<details>
-<summary><b>📖 How to get your Withings Client ID & Secret (1 minute)</b></summary>
+### 2. Get your Withings API credentials (1 minute)
 
 1. Log in to the [Withings Developer Dashboard](https://developer.withings.com/dashboard/) with your personal Withings account.
 2. Click **Create an application** (or edit your existing app):
@@ -50,15 +34,30 @@ In your newly created repository, navigate to **Settings → Secrets and variabl
      ```text
      http://localhost:8080
      ```
-     *(If you also use the optional Google Apps Script relay for instant sync, click **Register another url** and add your Webhook URL here too).*
+     *(If you also set up the optional Google Apps Script relay for instant sync, click **Register another url** and add your Webhook URL here too).*
 3. Click **Done** to save.
-4. Copy your **Client ID** and **Consumer Secret** into your GitHub repository secrets (`WITHINGS_CLIENT_ID` and `WITHINGS_CLIENT_SECRET`).
-
-</details>
+4. Keep your **Client ID** and **Consumer Secret** handy for the next step.
 
 ---
 
-### 3. First Run — Authorize Withings (No terminal needed)
+### 3. Configure GitHub Secrets
+
+In your newly created repository, navigate to **Settings → Secrets and variables → Actions** and add the following repository secrets:
+
+| Secret | Description | Where to find it |
+|---|---|---|
+| `GARMIN_EMAIL` | Garmin Connect account email | Your Garmin login |
+| `GARMIN_PASSWORD` | Garmin Connect account password | Your Garmin login |
+| `WITHINGS_CLIENT_ID` | Withings Client ID | From Step 2 above |
+| `WITHINGS_CLIENT_SECRET` | Withings Consumer Secret | From Step 2 above |
+| `WEBHOOK_URL` | *(Optional)* Google Apps Script URL for instant sync | See [Real-Time Sync](#-real-time-sync-optional) below |
+
+> [!NOTE]
+> **No manual token generation or curl command required.** The action handles the entire OAuth authorization flow automatically in the next step.
+
+---
+
+### 4. First Run — Authorize Withings (No terminal needed)
 
 1. In your repository, go to the **Actions** tab → **Withings → Garmin Sync** → click **Run workflow** (leave all input fields blank).
 2. Once the initial run finishes, open the workflow run and view the **Job Summary** tab. Click the provided **Withings Authorization link** and grant access.
@@ -76,7 +75,7 @@ The action automatically exchanges the authorization code for OAuth tokens, save
 <summary><b>🔐 Garmin 2FA / MFA (First Login Only)</b></summary>
 
 If your Garmin account has **two-factor authentication (2FA/MFA)** enabled:
-- When running step 3 above, also provide your current verification code (authenticator app TOTP or email OTP) in the **`garmin_mfa_code`** field.
+- When running the workflow with your `withings_code`, also provide your current verification code (authenticator app TOTP or email OTP) in the **`garmin_mfa_code`** field.
 - The session is saved to your private state branch, so MFA is never needed again unless Garmin expires your session.
 
 </details>
@@ -148,7 +147,7 @@ Withings sends an HTTP webhook when a new weigh-in occurs. Google Apps Script se
 On the next workflow run, the action registers this callback URL with the Withings Notify API automatically.
 
 > [!TIP]
-> If you set your Google Apps Script URL as the **Callback URL** in the Withings Developer Portal, step 3 of the initial setup becomes fully automatic — zero copy-pasting of authorization codes needed!
+> If you set your Google Apps Script URL as a **Registered URL** in the Withings Developer Portal, the initial setup becomes fully automatic — zero copy-pasting of authorization codes needed!
 
 </details>
 
