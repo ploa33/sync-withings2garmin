@@ -13,4 +13,4 @@ enabled = false
 # - HMAC_SECRET
 
 [vars]
-GH_APP_SLUG = "sync-withings2garmin"
+GH_APP_SLUG = "relay-withings2garmin"

@@ -51,7 +51,7 @@ In your private repository, go to **Settings → Secrets and variables → Actio
 
 ### 4. Install the GitHub App (1 click)
 
-👉 **[Install Sync Withings2Garmin](https://github.com/apps/sync-withings2garmin/installations/new)**
+👉 **[Install Relay Withings2Garmin](https://github.com/apps/relay-withings2garmin/installations/new)**
 
 Select **Only select repositories** → pick your private repository → click **Install**.
 

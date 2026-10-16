@@ -717,7 +717,7 @@ export default {
           state,
           webhook_url: webhookUrl,
           relay_oauth_url: `${url.origin}/oauth`,
-          app_slug: env.GH_APP_SLUG || "sync-withings2garmin",
+          app_slug: env.GH_APP_SLUG || "relay-withings2garmin",
         }),
         { headers: { "Content-Type": "application/json", ...SECURITY_HEADERS } }
       );

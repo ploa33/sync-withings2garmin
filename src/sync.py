@@ -49,7 +49,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip()
 RELAY_URL = os.environ.get("RELAY_URL", "").strip().rstrip("/")
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "") or 30)
 SHOW_METRICS = os.environ.get("W2G_SHOW_METRICS", "").lower() in ("true", "1")
-DEFAULT_APP_SLUG = "sync-withings2garmin"
+DEFAULT_APP_SLUG = "relay-withings2garmin"
 
 # ── OAuth setup inputs ────────────────────────────────────────────────────────
 # WITHINGS_CODE: one-shot authorization code from Withings (expires in 30s).
