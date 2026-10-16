@@ -341,31 +341,31 @@ function renderSuccessPage(repo: string): Response {
     }
 
     /* ── Minimalist Premium Withings → Garmin Header ── */
-    .sync-header {{
+    .sync-header {
       margin: 0 auto 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
       user-select: none;
-    }}
+    }
 
-    .sync-nodes {{
+    .sync-nodes {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 16px;
       width: 100%;
       max-width: 248px;
-    }}
+    }
 
-    .brand-node {{
+    .brand-node {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
-    }}
+    }
 
-    .brand-tile {{
+    .brand-tile {
       width: 54px;
       height: 54px;
       border-radius: 13px;
@@ -374,41 +374,41 @@ function renderSuccessPage(repo: string): Response {
       justify-content: center;
       overflow: hidden;
       border: 1px solid rgba(240, 246, 252, 0.08);
-    }}
-    .brand-tile.withings {{
+    }
+    .brand-tile.withings {
       background: #ffffff;
-    }}
-    .brand-tile img {{
+    }
+    .brand-tile img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
-    }}
+    }
 
-    .brand-label {{
+    .brand-label {
       font-size: 11px;
       font-weight: 500;
       letter-spacing: 0.02em;
       color: #7d8590;
-    }}
+    }
 
     /* Minimalist Blue Line Bridge (no arrow, no dashes) */
-    .bridge {{
+    .bridge {
       flex: 1;
       display: flex;
       align-items: center;
       margin-bottom: 21px;
       min-width: 72px;
-    }}
-    .bridge-track {{
+    }
+    .bridge-track {
       width: 100%;
       height: 2px;
       background: #21262d;
       border-radius: 2px;
       overflow: hidden;
       position: relative;
-    }}
-    .bridge-fill {{
+    }
+    .bridge-fill {
       height: 100%;
       width: 100%;
       background: linear-gradient(90deg, #6e8efb 0%, #00a7e1 100%);
@@ -416,10 +416,10 @@ function renderSuccessPage(repo: string): Response {
       transform: scaleX(0);
       transform-origin: left center;
       animation: fillBridge 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards;
-    }}
+    }
 
     /* Sober & Premium Authorization Complete */
-    .auth-complete {{
+    .auth-complete {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -428,14 +428,14 @@ function renderSuccessPage(repo: string): Response {
       opacity: 0;
       transform: translateY(2px);
       animation: showAuthComplete 0.35s ease-out 0.9s forwards;
-    }}
-    .auth-complete-icon {{
+    }
+    .auth-complete-icon {
       width: 14px;
       height: 14px;
       display: block;
       flex-shrink: 0;
-    }}
-    .auth-complete-check {{
+    }
+    .auth-complete-check {
       stroke: #3fb950;
       stroke-width: 2;
       stroke-linecap: round;
@@ -443,23 +443,23 @@ function renderSuccessPage(repo: string): Response {
       stroke-dasharray: 18;
       stroke-dashoffset: 18;
       animation: drawCheck 0.3s ease-out 1.0s forwards;
-    }}
-    .auth-complete-text {{
+    }
+    .auth-complete-text {
       font-size: 12px;
       font-weight: 500;
       color: #8b949e;
       letter-spacing: 0.02em;
-    }}
+    }
 
-    @keyframes fillBridge {{
-      to {{ transform: scaleX(1); }}
-    }}
-    @keyframes showAuthComplete {{
-      to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    @keyframes drawCheck {{
-      to {{ stroke-dashoffset: 0; }}
-    }}
+    @keyframes fillBridge {
+      to { transform: scaleX(1); }
+    }
+    @keyframes showAuthComplete {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes drawCheck {
+      to { stroke-dashoffset: 0; }
+    }
 
     .divider {
       height: 1px;
