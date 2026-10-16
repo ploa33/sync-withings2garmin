@@ -32,7 +32,7 @@ In the [Withings Developer Dashboard](https://developer.withings.com/dashboard/)
 |---|---|
 | **Application Name** | `Withings to Garmin Sync` |
 | **Application Description** | `Scale sync to Garmin Connect` |
-| **Registered URLs** | `https://withings-sync-relay.workers.dev/oauth` |
+| **Registered URLs** | `https://withings-sync-relay.withings2garmin.workers.dev/oauth` |
 
 *(You can also add `https://ploa33.github.io/sync-withings2garmin/` as a fallback — both URLs are supported).*
 
@@ -57,7 +57,7 @@ In your new repository, go to **Settings → Secrets and variables → Actions**
 
 Install the companion GitHub App on your private repository:
 
-👉 **[Install Withings Sync GitHub App](https://github.com/apps/withings-to-garmin-sync/installations/new)**
+👉 **[Install Withings Sync GitHub App](https://github.com/apps/sync-withings2garmin/installations/new)**
 
 Select **Only select repositories** → choose your private sync repository → click **Install**.
 

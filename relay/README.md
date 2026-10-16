@@ -17,7 +17,7 @@ Zero personal health data, credentials, or metrics ever touch or pass through th
 1. Go to **[GitHub Developer Settings → GitHub Apps → New GitHub App](https://github.com/settings/apps/new)**:
    - **GitHub App name:** `Withings to Garmin Sync` (or similar)
    - **Homepage URL:** `https://github.com/ploa33/sync-withings2garmin`
-   - **Callback URL:** `https://withings-sync-relay.<your-subdomain>.workers.dev/oauth`
+   - **Callback URL:** `https://withings-sync-relay.withings2garmin.workers.dev/oauth`
    - **Webhook:** Uncheck **Active** (no incoming webhooks needed from GitHub).
 2. **Permissions:**
    - **Repository permissions → Actions:** `Read and write` (needed to dispatch `sync.yml`).

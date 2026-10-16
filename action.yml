@@ -43,7 +43,7 @@ inputs:
   relay-url:
     description: "Optional URL of the Cloudflare Worker relay. Enables 1-click OAuth setup and automatic real-time sync."
     required: false
-    default: "https://withings-sync-relay.workers.dev"
+    default: "https://withings-sync-relay.withings2garmin.workers.dev"
   mode:
     description: "sync (default) | dry-run (fetch only, upload nothing) | simulate (upload one FAKE weigh-in)."
     required: false
