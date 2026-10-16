@@ -71,9 +71,9 @@ OAUTH_REDIRECT_URI = os.environ.get("WITHINGS_REDIRECT_URI", "").strip() or PAGE
 
 def get_github_oidc_token(audience: str = "withings-sync-relay") -> str | None:
     """Request a GitHub Actions OIDC ID token if available (requires permissions: id-token: write)."""
-    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
-    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    if not request_url or not request_token:
+    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "").strip()
+    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "").strip()
+    if not request_url or not request_token or not request_url.startswith("https://"):
         return None
     try:
         resp = requests.get(
@@ -98,7 +98,7 @@ def relay_register(relay_url: str, withings_userid: str = "") -> dict | None:
     At Run 2 (withings_userid="12345"): returns signed webhook URL for Withings real-time sync.
     Returns None on any error (graceful fallback to classic mode).
     """
-    if not relay_url:
+    if not relay_url or not relay_url.startswith("https://"):
         return None
     oidc_token = get_github_oidc_token()
     if not oidc_token:

@@ -249,6 +249,9 @@ def test_relay_register_run1_and_run2(sync, monkeypatch):
     res2 = sync.relay_register("https://relay.workers.dev", withings_userid="98765")
     assert res2["webhook_url"] == "https://relay.workers.dev/hook?sig=abc"
 
+    # Non-HTTPS relay URL must be rejected
+    assert sync.relay_register("http://relay.workers.dev") is None
+
 
 def test_ensure_withings_webhook_uses_relay_when_configured(sync, monkeypatch, capsys):
     monkeypatch.setattr(sync, "WEBHOOK_URL", "")

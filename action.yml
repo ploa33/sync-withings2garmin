@@ -95,6 +95,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         STATE_BRANCH: ${{ inputs.state-branch }}
       run: |
+        umask 077
         STATE_DIR="$RUNNER_TEMP/withings2garmin-state"
         echo "W2G_STATE_DIR=$STATE_DIR" >> "$GITHUB_ENV"
         REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
