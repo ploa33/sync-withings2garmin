@@ -1,46 +1,33 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  Withings → Garmin Connect sync
-#  This is the ONLY file your repository needs. The sync engine is loaded from
-#  ploa33/sync-withings2garmin@v1 and updates automatically.
+#  Withings → Garmin Connect Sync
+#  This is the ONLY file your repository needs.
 # ─────────────────────────────────────────────────────────────────────────────
 name: "Withings → Garmin Sync"
 
 on:
-  # Real-time trigger from the optional webhook (see README).
-  # When using the Google Apps Script "all-in-one" setup (Option 2), the GAS
-  # can also pass a Withings authorization code here during initial setup via
-  # client_payload.code — the action will exchange it automatically.
   repository_dispatch:
     types: [withings_sync]
-  # Safety net: 09:00 and 22:00 (Paris, summer time)
   schedule:
-    - cron: "0 7,20 * * *"
-  # Manual run from the Actions tab
+    - cron: "0 7,20 * * *"   # 09:00 & 22:00 CEST safety net
   workflow_dispatch:
     inputs:
       mode:
-        description: "sync = normal · dry-run = show only · simulate = upload a FAKE weigh-in"
+        description: "sync (normal) · dry-run (test fetch) · simulate (upload test weigh-in)"
         type: choice
         options: [sync, dry-run, simulate]
         default: sync
-      withings_code:
-        description: |
-          [Setup only] Paste the code= value from the Withings redirect URL here.
-          ⚠️ Open this panel BEFORE clicking the Withings auth link — the code expires in ~30 seconds.
-          Leave empty for normal sync runs.
+      garmin_mfa_code:
+        description: "[2FA only] Garmin 6-digit code (only needed once if 2FA is enabled)"
         required: false
         default: ""
-      garmin_mfa_code:
-        description: |
-          [Setup only] Garmin Connect MFA code (TOTP / email OTP).
-          Only needed on first login if your Garmin account has 2FA enabled.
-          Leave empty for normal sync runs.
+      withings_code:
+        description: "[Auto-filled] Withings authorization code (leave empty)"
         required: false
         default: ""
 
 permissions:
-  contents: write   # tokens & sync state are saved on the 'withings2garmin-state' branch
-  id-token: write   # required for GitHub Actions OIDC authentication with the relay
+  contents: write   # saves rotating tokens & session to 'withings2garmin-state' branch
+  id-token: write   # authenticates with the stateless relay via GitHub OIDC
 
 concurrency:
   group: withings2garmin-sync
@@ -48,7 +35,6 @@ concurrency:
 
 jobs:
   sync:
-    # Never runs on the public template itself
     if: github.repository != 'ploa33/sync-withings2garmin'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -58,8 +44,6 @@ jobs:
           withings-client-id: ${{ vars.WITHINGS_CLIENT_ID || secrets.WITHINGS_CLIENT_ID }}
           withings-client-secret: ${{ secrets.WITHINGS_CLIENT_SECRET }}
           withings-refresh-token: ${{ secrets.WITHINGS_REFRESH_TOKEN }}
-          # Pass the OAuth code from manual input OR from the GAS repository_dispatch
-          # payload (Option 2 — Google Apps Script all-in-one setup).
           withings-code: ${{ inputs.withings_code || github.event.client_payload.code }}
           garmin-email: ${{ secrets.GARMIN_EMAIL }}
           garmin-password: ${{ secrets.GARMIN_PASSWORD }}

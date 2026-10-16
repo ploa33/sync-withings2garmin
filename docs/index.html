@@ -64,10 +64,114 @@
       text-align: center;
     }
 
-    .header-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      display: inline-block;
+    .sync-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin: 0 auto 24px;
+      padding: 16px 20px;
+      background: rgba(13, 17, 23, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-width: 340px;
+    }
+    .brand-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-tile {
+      width: 60px;
+      height: 60px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #161b22;
+      border: 1px solid rgba(240, 246, 252, 0.12);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    }
+    .brand-tile.withings {
+      background: linear-gradient(145deg, #13252b 0%, #0d1519 100%);
+      border-color: rgba(0, 210, 190, 0.35);
+      animation: pulseSource 2.4s ease-in-out infinite;
+    }
+    .brand-tile.garmin {
+      background: linear-gradient(145deg, #112032 0%, #0d141d 100%);
+      border-color: rgba(0, 124, 195, 0.4);
+      animation: pulseTarget 2.4s ease-in-out infinite;
+    }
+    .brand-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .stream-track {
+      flex: 1;
+      height: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-width: 84px;
+      margin-bottom: 18px;
+    }
+    .stream-line {
+      width: 100%;
+      height: 2px;
+      background: var(--border);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stream-packet {
+      position: absolute;
+      top: 0;
+      left: -45%;
+      width: 45%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #00d2be, #388bfd);
+      border-radius: 2px;
+      animation: flowPacket 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .stream-chevrons {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .stream-chevrons span {
+      font-size: 13px;
+      line-height: 1;
+      font-weight: 700;
+      opacity: 0.25;
+      animation: chevronWave 1.8s infinite;
+    }
+    .stream-chevrons span:nth-child(1) { animation-delay: 0.0s; color: #00d2be; }
+    .stream-chevrons span:nth-child(2) { animation-delay: 0.25s; color: #1ca8d6; }
+    .stream-chevrons span:nth-child(3) { animation-delay: 0.5s; color: #388bfd; }
+
+    @keyframes flowPacket {
+      0%   { left: -45%; opacity: 0.3; }
+      30%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { left: 105%; opacity: 0; }
+    }
+    @keyframes chevronWave {
+      0%, 100% { opacity: 0.2; transform: translateX(0); }
+      40% { opacity: 1; transform: translateX(2px); }
+    }
+    @keyframes pulseSource {
+      0%, 100% { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(0, 210, 190, 0); }
+      20% { box-shadow: 0 6px 20px rgba(0, 210, 190, 0.22), 0 0 0 4px rgba(0, 210, 190, 0.08); }
+    }
+    @keyframes pulseTarget {
+      0%, 60%, 100% { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(56, 139, 253, 0); }
+      85% { box-shadow: 0 6px 22px rgba(56, 139, 253, 0.28), 0 0 0 4px rgba(56, 139, 253, 0.1); }
     }
 
     h1 {
@@ -83,18 +187,30 @@
       margin-bottom: 24px;
     }
 
-    .badge {
+    .status-chip {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 20px;
-      background: rgba(46, 164, 79, 0.15);
-      color: var(--primary);
-      border: 1px solid rgba(46, 164, 79, 0.4);
+      gap: 8px;
+      padding: 5px 14px 5px 7px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      margin-bottom: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-bold);
+      border: 1px solid var(--border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2ea043 0%, #238636 100%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(46, 160, 67, 0.45);
     }
 
     .code-container {
@@ -195,13 +311,43 @@
 <body>
 
   <div class="card">
-    <div class="header-icon">⚖️</div>
+    <div class="sync-flow" aria-label="Syncing from Withings to Garmin">
+      <div class="brand-node">
+        <div class="brand-tile withings">
+          <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="6" y="6" width="28" height="28" rx="8" stroke="#00d2be" stroke-width="2" fill="rgba(0,210,190,0.08)"/>
+            <path d="M20 11 A6 6 0 0 1 26 17 L14 17 A6 6 0 0 1 20 11 Z" fill="rgba(0,210,190,0.25)" stroke="#00d2be" stroke-width="1.5"/>
+            <line x1="20" y1="17" x2="22.5" y2="13" stroke="#00d2be" stroke-width="1.8" stroke-linecap="round"/>
+            <text x="20" y="28.5" text-anchor="middle" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="6.2" font-weight="800" letter-spacing="0.8">WITHINGS</text>
+          </svg>
+        </div>
+        <span class="brand-label">Withings</span>
+      </div>
+      <div class="stream-track">
+        <div class="stream-line"><div class="stream-packet"></div></div>
+        <div class="stream-chevrons"><span>›</span><span>›</span><span>›</span></div>
+      </div>
+      <div class="brand-node">
+        <div class="brand-tile garmin">
+          <svg width="40" height="40" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="22,9 28.5,20 15.5,20" fill="#007cc3"/>
+            <text x="22" y="31" text-anchor="middle" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="8.2" font-weight="900" letter-spacing="0.9">GARMIN</text>
+          </svg>
+        </div>
+        <span class="brand-label">Garmin</span>
+      </div>
+    </div>
     <h1>Withings → Garmin Connect</h1>
 
     <!-- Success View -->
     <div id="success-view" style="display: none;">
-      <div class="badge">
-        <span>●</span> Authorized with Withings
+      <div class="status-chip">
+        <span class="status-icon">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M13.2 4.8L6.5 11.5L2.8 7.8" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span>Authorized with Withings</span>
       </div>
       <p class="subtitle">
         Your authorization code was generated successfully. Click below to copy it, then paste it into your GitHub Actions workflow run:

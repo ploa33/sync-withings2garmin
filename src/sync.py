@@ -49,7 +49,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip()
 RELAY_URL = os.environ.get("RELAY_URL", "").strip().rstrip("/")
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "") or 30)
 SHOW_METRICS = os.environ.get("W2G_SHOW_METRICS", "").lower() in ("true", "1")
-DEFAULT_APP_SLUG = "withings-to-garmin-sync"
+DEFAULT_APP_SLUG = "sync-withings2garmin"
 
 # ── OAuth setup inputs ────────────────────────────────────────────────────────
 # WITHINGS_CODE: one-shot authorization code from Withings (expires in 30s).
@@ -261,6 +261,10 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
     """
     mask_token(code)
     print("🔄 Exchanging Withings authorization code for tokens…")
+    relay_oauth_uri = f"{RELAY_URL}/oauth" if RELAY_URL else ""
+    explicit_uri = os.environ.get("WITHINGS_REDIRECT_URI", "").strip()
+    primary_uri = explicit_uri or relay_oauth_uri or OAUTH_REDIRECT_URI
+
     resp = requests.post(
         f"{WITHINGS_API}/v2/oauth2",
         data={
@@ -269,20 +273,17 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
             "client_id":     client_id,
             "client_secret": client_secret,
             "code":          code,
-            "redirect_uri":  OAUTH_REDIRECT_URI,
+            "redirect_uri":  primary_uri,
         },
         timeout=30,
     )
     resp.raise_for_status()
     body = resp.json()
 
-    # If primary redirect_uri failed, try fallbacks (Relay, localhost, GitHub Pages, or WEBHOOK_URL)
+    # If primary redirect_uri failed, try fallbacks
     if body.get("status") != 0:
-        relay_oauth_uri = f"{RELAY_URL}/oauth" if RELAY_URL else ""
-        fallbacks = [
-            uri for uri in [relay_oauth_uri, LOCALHOST_REDIRECT_URI, PAGES_REDIRECT_URI, WEBHOOK_URL]
-            if uri and uri != OAUTH_REDIRECT_URI
-        ]
+        candidates = [relay_oauth_uri, OAUTH_REDIRECT_URI, PAGES_REDIRECT_URI, LOCALHOST_REDIRECT_URI, WEBHOOK_URL]
+        fallbacks = [uri for uri in candidates if uri and uri != primary_uri]
         for fb_uri in fallbacks:
             if body.get("status") == 0:
                 break
@@ -304,10 +305,8 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
 
     if body.get("status") != 0:
         die(
-            f"Withings code exchange failed (status={body.get('status')}): "
-            f"{body.get('error', body)}. "
-            "Make sure you pasted the code quickly (it expires in ~30 seconds) "
-            "and that the redirect_uri in your Withings app matches exactly."
+            f"Withings code exchange failed (status={body.get('status')}): {body.get('error', body)}. "
+            "Check that your Withings app Callback URL matches exactly."
         )
     print("✅ Withings authorization code exchanged successfully")
     token_body = body["body"]
@@ -318,7 +317,7 @@ def exchange_withings_code(client_id: str, client_secret: str, code: str) -> dic
 
 def show_setup_guide(client_id: str, relay_info: dict | None = None) -> None:
     """
-    Emit a ::warning annotation and write a step-by-step guide to
+    Emit a ::warning annotation and write a minimalist step-by-step guide to
     $GITHUB_STEP_SUMMARY with dynamic links to the user's repository.
     """
     auth_url_pages = build_withings_auth_url(client_id, PAGES_REDIRECT_URI)
@@ -328,15 +327,12 @@ def show_setup_guide(client_id: str, relay_info: dict | None = None) -> None:
     repo = os.environ.get("GITHUB_REPOSITORY", "").strip("/")
     workflow_url = f"{server}/{repo}/actions/workflows/sync.yml" if repo else ""
     workflow_link = (
-        f"[👉 Open the 'Run workflow' panel on your repository]({workflow_url})"
+        f"[Open 'Run workflow']({workflow_url})"
         if workflow_url
         else "Go to **Actions → Withings → Garmin Sync → Run workflow**"
     )
 
-    gh_warning(
-        "No Withings token found. Follow the guide in the Job Summary below "
-        "to complete the one-time setup, then re-run this workflow."
-    )
+    gh_warning("No Withings token found. Open the Job Summary below to authorize in 1 click.")
 
     if relay_info and relay_info.get("state") and RELAY_URL:
         relay_redirect = f"{RELAY_URL}/oauth"
@@ -344,87 +340,48 @@ def show_setup_guide(client_id: str, relay_info: dict | None = None) -> None:
         installed = relay_info.get("installed", False)
         app_slug = relay_info.get("app_slug", DEFAULT_APP_SLUG)
         install_url = f"https://github.com/apps/{app_slug}/installations/new"
+        withings_dash = "https://developer.withings.com/dashboard/"
 
         if installed:
-            guide = f"""### ⚡ Withings → Garmin — 1-Click Setup
+            guide = f"""### ⚡ One-Click Withings Setup
 
-No Withings token was found. The GitHub App is **already installed** on `{repo or 'your repository'}`!
+✅ **Garmin Connect:** Ready · ✅ **GitHub App:** Installed on `{repo or 'your repo'}`
 
-#### 🚀 Complete Setup (1 Click)
-**[👉 Click here to authorise Withings]({auth_url_relay})**
+👉 **[Authorize Withings Account]({auth_url_relay})**
 
-Log in and approve permissions. That's it!
-🎉 The relay will automatically launch your first sync workflow within seconds and activate instant real-time sync.
+*Approve access on Withings — your first sync and real-time webhook will start automatically.*
 
-<details>
-<summary><b>🛠️ Manual Fallback (Without Relay)</b></summary>
-
-If you prefer to authorize manually without the relay:
-1. Open {workflow_link}
-2. **[Click here to authorise via GitHub Pages]({auth_url_pages})**
-3. Copy the code and paste it into `withings_code`.
-
-</details>
+> 💡 **Got `redirect_uri_mismatch`?** Set your [Withings App]({withings_dash}) Callback URL to:
+> `{relay_redirect}`
 """
         else:
-            guide = f"""### ⚡ Withings → Garmin — Quick Setup
+            guide = f"""### ⚡ Setup Required (2 Clicks)
 
-No Withings token was found. Follow these two quick steps to authorise your account:
+✅ **Garmin Connect:** Ready
 
-#### Step 1 — Install the GitHub App (10 seconds)
-**[👉 Click here to install the Withings Sync App]({install_url})**
-Select **Only select repositories** → choose `{repo or 'your repository'}` → click **Install**.
+1. **[Install the GitHub App]({install_url})** on `{repo or 'your repo'}` *(Only select repositories)*.
+2. **[Authorize Withings Account]({auth_url_relay})**
 
-#### Step 2 — Authorise your Withings account
-**[👉 Click here to authorise Withings]({auth_url_relay})**
-Log in and approve permissions.
+*Once approved, your first sync and real-time webhook start automatically.*
 
-🎉 Once approved, your first sync will launch automatically and real-time weigh-in sync will be active!
-
-<details>
-<summary><b>🛠️ Manual Fallback (Without Relay)</b></summary>
-
-If you prefer not to install the GitHub App:
-1. Open {workflow_link}
-2. **[Click here to authorise via GitHub Pages]({auth_url_pages})**
-3. Copy the code, paste it into `withings_code`, and click **Run workflow**.
-
-</details>
+> 💡 **Got `redirect_uri_mismatch`?** Set your [Withings App]({withings_dash}) Callback URL to:
+> `{relay_redirect}`
 """
+
     else:
         guide = f"""### ⚙️ Withings → Garmin — Initial Setup Required
 
-No Withings token was found. Complete this **one-time setup** to authorise your account.
+No Withings token was found. Complete this one-time setup:
 
-> **⏱ Important — the code expires in ~30 seconds.**
-> Open the "Run workflow" panel **before** clicking the Withings link below,
-> so you can paste the code immediately without waiting.
-
-#### Step 1 — Keep the Run workflow panel ready
-Open your workflow in another browser tab so you are ready to paste the code:
-* {workflow_link}
-
-#### Step 2 — Authorise your Withings account
-**[👉 Click here to authorise Withings]({auth_url_pages})**
-
-Log in, approve permissions, and click the **📋 Copy Code** button on the confirmation page.
-
-*(If your Withings app is configured with `http://localhost:8080`, **[use this link instead]({auth_url_localhost})**)*
-
-#### Step 3 — Paste the code and re-run
-In your **Run workflow** panel ({workflow_link}),
-paste the code into the **`withings_code`** field and click **Run workflow**.
-
-The action will exchange it for tokens, save them securely to the state branch, and run your first sync automatically.
-
----
-*After this first run, tokens rotate automatically — no manual action ever needed again.*
+1. Keep {workflow_link} open in a tab.
+2. **[👉 Authorize Withings Account]({auth_url_pages})** *(or [via localhost]({auth_url_localhost}))*
+3. Copy the code (valid ~30s), paste it into **`withings_code`**, and click **Run workflow**.
 """
     gh_summary(guide)
     print("\n" + "=" * 60)
-    print("  ⚙️  SETUP REQUIRED — see the Job Summary tab for instructions")
-    print(f"  Auth URL: {auth_url_pages}")
+    print("  ⚙️  SETUP REQUIRED — see the Job Summary tab")
     print("=" * 60 + "\n")
+
 
 
 def refresh_withings_token(
@@ -702,10 +659,16 @@ def get_garmin_client(email: str, password: str):
 
     def _handle_mfa() -> str:
         if not GARMIN_MFA_CODE:
-            msg = (
-                "Garmin 2FA (MFA) is enabled on your account. "
-                "Re-run this workflow and provide your current verification code in the 'garmin_mfa_code' field."
+            server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+            repo = os.environ.get("GITHUB_REPOSITORY", "").strip("/")
+            wf_url = f"{server}/{repo}/actions/workflows/sync.yml" if repo else ""
+            wf_link = f"👉 **[Open 'Run workflow']({wf_url})**" if wf_url else "Go to **Actions → Run workflow**"
+            gh_summary(
+                "### 🔐 Garmin 2FA Verification Required\n\n"
+                f"{wf_link} and enter your current 6-digit verification code in **`garmin_mfa_code`**.\n"
+                "*(Only needed once — your session will be saved automatically.)*\n"
             )
+            msg = "Garmin 2FA is active. Re-run this workflow and enter your verification code in 'garmin_mfa_code'."
             print(f"::error title=Garmin MFA Required::{msg}")
             sys.exit(1)
         print("🔐 Using provided Garmin MFA code (TOTP/OTP)")

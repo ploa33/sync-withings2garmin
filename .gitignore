@@ -4,11 +4,15 @@ __pycache__/
 .ruff_cache/
 .venv/
 
-# Local runs: never commit credentials or session state
+# Local runs & secrets: never commit credentials, keys, or session state
 tokens.json
 garth_session/
 sync_state.json
 .state/
+*.pem
+*.key
+.env*
+.dev.vars*
 
 # Node / Cloudflare Workers
 node_modules/
