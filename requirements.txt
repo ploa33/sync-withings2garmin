@@ -1,2 +1,2 @@
-requests>=2.31,<3
+requests>=2.34.2,<3
 garminconnect>=0.3.10,<0.4
