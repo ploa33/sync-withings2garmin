@@ -145,13 +145,14 @@ SESSION_MERGE_WINDOW = 300
 
 # Withings measure type IDs → friendly names
 MEASURE_TYPES = {
-    1:  "weight",          # kg
-    5:  "fat_free_mass",   # kg
-    6:  "fat_percent",     # % (Withings already returns a percentage)
-    8:  "fat_mass_weight", # kg
-    76: "muscle_mass",     # kg
-    77: "hydration",       # kg  → converted to % before Garmin upload
-    88: "bone_mass",       # kg
+    1:   "weight",          # kg
+    5:   "fat_free_mass",   # kg
+    6:   "fat_percent",     # % (Withings already returns a percentage)
+    8:   "fat_mass_weight", # kg
+    76:  "muscle_mass",     # kg
+    77:  "hydration",       # kg  → converted to % before Garmin upload
+    88:  "bone_mass",       # kg
+    125: "visceral_fat",    # Visceral fat rating / index (Body Scan, Body Comp)
 }
 
 VALID_MODES = ("sync", "dry-run", "simulate")
@@ -623,11 +624,12 @@ def to_garmin_payload(measures: dict) -> dict:
         hydration_percent = round(hydration_kg / weight * 100, 2)
 
     return {
-        "weight":            weight,
-        "percent_fat":       fat_percent,
-        "percent_hydration": hydration_percent,
-        "bone_mass":         measures.get("bone_mass"),
-        "muscle_mass":       measures.get("muscle_mass"),
+        "weight":              weight,
+        "percent_fat":         fat_percent,
+        "percent_hydration":   hydration_percent,
+        "bone_mass":           measures.get("bone_mass"),
+        "muscle_mass":         measures.get("muscle_mass"),
+        "visceral_fat_rating": measures.get("visceral_fat"),
     }
 
 
@@ -687,11 +689,12 @@ PAYLOAD_COLUMNS = (
     ("muscle_mass", "kg"),
     ("percent_hydration", "%"),
     ("bone_mass", "kg"),
+    ("visceral_fat_rating", ""),
 )
 
 
 def describe(measure_dt: datetime, payload: dict, show_values: bool = SHOW_METRICS) -> list[str]:
-    """Human-readable cells: date, weight, fat, muscle, water, bone.
+    """Human-readable cells: date, weight, fat, muscle, water, bone, visceral fat.
 
     Biometric values are masked by default to protect health privacy in GitHub Actions logs.
     Set W2G_SHOW_METRICS=true to reveal raw values.
@@ -702,7 +705,8 @@ def describe(measure_dt: datetime, payload: dict, show_values: bool = SHOW_METRI
         if val is None:
             cells.append("--")
         elif show_values:
-            cells.append(f"{val} {unit}")
+            suffix = f" {unit}" if unit else ""
+            cells.append(f"{val}{suffix}")
         else:
             cells.append("✓ recorded")
     return cells
@@ -815,7 +819,7 @@ def main() -> None:
         print("\n🧪 SIMULATION — a FAKE weigh-in will be uploaded to your Garmin account")
         weigh_ins = [(datetime.now(timezone.utc), {
             "weight": 74.5, "fat_percent": 17.8, "muscle_mass": 36.1,
-            "hydration": 41.0, "bone_mass": 3.2,
+            "hydration": 41.0, "bone_mass": 3.2, "visceral_fat": 4.0,
         })]
     else:
         window_start = int((datetime.now(timezone.utc) - timedelta(days=lookback)).timestamp())
@@ -857,7 +861,7 @@ def main() -> None:
     gh_output("synced-count", len(payloads))
     gh_summary("### ⚖️ Withings → Garmin\n\n"
                f"Mode `{mode}`: **{len(payloads)}** weigh-in(s) uploaded.\n\n"
-               "| Date | Weight | Fat | Muscle | Water | Bone |\n|---|---|---|---|---|---|\n"
+               "| Date | Weight | Fat | Muscle | Water | Bone | Visceral |\n|---|---|---|---|---|---|---|\n"
                + "\n".join(rows))
     print("\n🎉 Sync complete.\n")
 

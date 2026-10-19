@@ -45,10 +45,26 @@ def test_sessions_without_weight_are_dropped(sync):
 
 
 def test_payload_conversions(sync):
-    payload = sync.to_garmin_payload({"weight": 80.0, "fat_mass_weight": 16.0, "hydration": 44.0})
+    payload = sync.to_garmin_payload({
+        "weight": 80.0,
+        "fat_mass_weight": 16.0,
+        "hydration": 44.0,
+        "visceral_fat": 4.0,
+    })
     assert payload["percent_fat"] == 20.0
     assert payload["percent_hydration"] == 55.0
     assert payload["bone_mass"] is None
+    assert payload["visceral_fat_rating"] == 4.0
+
+
+def test_visceral_fat_measure_type(sync):
+    assert sync.MEASURE_TYPES[125] == "visceral_fat"
+    groups = [grp(1000, (1, 75000, -3), (125, 5, 0))]
+    sessions = sync.group_measurements(groups)
+    assert len(sessions) == 1
+    assert sessions[0][1]["visceral_fat"] == 5.0
+    payload = sync.to_garmin_payload(sessions[0][1])
+    assert payload["visceral_fat_rating"] == 5.0
 
 
 def test_fat_percent_from_fat_free_mass(sync):
@@ -190,7 +206,14 @@ def test_webhook_already_subscribed_skips_subscribe(sync, monkeypatch, capsys):
 
 
 def test_health_metrics_masked_by_default(sync):
-    payload = {"weight": 75.0, "percent_fat": 15.0, "muscle_mass": 35.0, "percent_hydration": 55.0, "bone_mass": 3.0}
+    payload = {
+        "weight": 75.0,
+        "percent_fat": 15.0,
+        "muscle_mass": 35.0,
+        "percent_hydration": 55.0,
+        "bone_mass": 3.0,
+        "visceral_fat_rating": 4.0,
+    }
     dt = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
     cells_masked = sync.describe(dt, payload, show_values=False)
     assert cells_masked[0] == "2026-10-15 12:00 UTC"
@@ -198,10 +221,18 @@ def test_health_metrics_masked_by_default(sync):
         assert cell == "✓ recorded"
         assert "75" not in cell
         assert "15" not in cell
+        assert "4" not in cell
 
     cells_raw = sync.describe(dt, payload, show_values=True)
     assert "75.0 kg" in cells_raw[1]
     assert "15.0 %" in cells_raw[2]
+    assert cells_raw[6] == "4.0"
+
+    # Missing visceral fat rating produces "--"
+    payload_without_visceral = dict(payload)
+    del payload_without_visceral["visceral_fat_rating"]
+    cells_missing = sync.describe(dt, payload_without_visceral, show_values=True)
+    assert cells_missing[6] == "--"
 
 
 def test_get_github_oidc_token(sync, monkeypatch):

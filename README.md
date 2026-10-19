@@ -5,9 +5,9 @@
 [![CI](https://github.com/ploa33/sync-withings2garmin/actions/workflows/ci.yml/badge.svg)](https://github.com/ploa33/sync-withings2garmin/actions/workflows/ci.yml)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-orange.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/ploa33)
 
-Automatically sync weigh-ins and body composition from any **Withings Scale** (Body, Body+, Body Smart, Body Scan, Body Comp, Body Cardio) to **Garmin Connect** — 100% free, private, and real-time via GitHub Actions.
+Automatically sync weigh-ins and body composition from any **Withings Scale** (Body, Body+, Body Smart, Body Scan, Body Scan 2, Body Comp, BodyFit, Body Cardio) to **Garmin Connect** — 100% free, private, and real-time via GitHub Actions.
 
-**Metrics:** `Weight` · `Body Fat %` · `Muscle Mass` · `Body Water %` · `Bone Mass`
+**Metrics:** `Weight` · `Body Fat %` · `Muscle Mass` · `Body Water %` · `Bone Mass` · `Visceral Fat`
 
 ---
 

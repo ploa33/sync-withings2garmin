@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/):
 users on `@v1` receive every `v1.x.y` automatically.
 
+## [1.4.0] - 2026-10-19
+
+### Added
+- **Visceral Fat Rating Sync**: Automatically syncs visceral fat index (Withings measure type 125) to Garmin Connect (`visceral_fat_rating`) for Withings Body Scan, Body Scan 2, and Body Comp scales.
+- Updated Job Summary table and logs to display visceral fat ratings.
+
 ## [1.3.0] - 2026-10-15
 
 ### Added
