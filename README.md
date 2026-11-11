@@ -30,7 +30,7 @@ Open the **[Withings Developer Dashboard](https://developer.withings.com/dashboa
 |---|---|
 | **Application Name** | `Withings to Garmin Sync` |
 | **Application Description** | `Scale sync to Garmin Connect` |
-| **Callback URL** *(exact)* | `https://withings-sync-relay.withings2garmin.workers.dev/oauth` |
+| **Callback URL** *(exact)* | `https://withings-sync-relay.ploa33.workers.dev/oauth` |
 
 Click **Done** and copy your **Client ID** and **Consumer Secret**.
 
@@ -70,7 +70,7 @@ Select **Only select repositories** → pick your private repository → click *
 <details>
 <summary><b>❓ Troubleshooting & Options</b></summary>
 
-* **`redirect_uri_mismatch` on Withings:** Ensure the **Callback URL** in your [Withings App](https://developer.withings.com/dashboard/) is set **only** to `https://withings-sync-relay.withings2garmin.workers.dev/oauth` (no trailing `/`, no spaces), save, and wait 30 seconds.
+* **`redirect_uri_mismatch` on Withings:** Ensure the **Callback URL** in your [Withings App](https://developer.withings.com/dashboard/) is set **only** to `https://withings-sync-relay.ploa33.workers.dev/oauth` (no trailing `/`, no spaces), save, and wait 30 seconds.
 * **Garmin 2FA / MFA:** Enter your current 6-digit verification code in `garmin_mfa_code` when clicking **Run workflow** on the first run. Your session is saved afterward.
 * **Show weight values in logs:** Biometric values are masked (`✓ recorded`) by default. To display numbers in your private Action logs, add a repository variable `W2G_SHOW_METRICS` = `true`.
 

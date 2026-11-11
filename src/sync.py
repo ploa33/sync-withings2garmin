@@ -507,6 +507,21 @@ def ensure_withings_webhook(access_token: str, userid: str = "") -> None:
         data = resp.json()
         if data.get("status") == 0:
             profiles = (data.get("body") or {}).get("profiles") or []
+            # Revoke any obsolete relay webhook subscriptions
+            for p in profiles:
+                cb = p.get("callbackurl", "")
+                if cb and cb != target_webhook and ("withings-sync-relay" in cb or "withings2garmin" in cb):
+                    print(f"🧹 Revoking obsolete Withings webhook: {cb}")
+                    try:
+                        requests.post(
+                            f"{WITHINGS_API}/notify",
+                            data={"action": "revoke", "callbackurl": cb, "appli": 1},
+                            headers=headers,
+                            timeout=10,
+                        )
+                    except (requests.RequestException, ValueError):
+                        pass
+
             if any(p.get("callbackurl") == target_webhook for p in profiles):
                 print("📡 Withings real-time webhook active")
                 return
