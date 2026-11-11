@@ -308,5 +308,32 @@ def test_ensure_withings_webhook_uses_relay_when_configured(sync, monkeypatch, c
     assert "real-time webhook subscribed" in capsys.readouterr().out
 
 
+def test_ensure_withings_webhook_revokes_obsolete_webhooks(sync, monkeypatch, capsys):
+    target = "https://withings-sync-relay.ploa33.workers.dev/hook?u=12345&s=valid"
+    obsolete = "https://withings-sync-relay.withings2garmin.workers.dev/hook?r=user%2Frepo&u=99999&s=old"
+    monkeypatch.setattr(sync, "WEBHOOK_URL", target)
+
+    calls = []
+    revoked_urls = []
+
+    def fake_post(url, data=None, **kwargs):
+        action = data.get("action")
+        calls.append(action)
+        if action == "list":
+            return _Resp({"status": 0, "body": {"profiles": [{"callbackurl": obsolete}, {"callbackurl": target}]}})
+        if action == "revoke":
+            revoked_urls.append(data.get("callbackurl"))
+            return _Resp({"status": 0})
+        return _Resp({"status": -1})
+
+    monkeypatch.setattr(sync.requests, "post", fake_post)
+    sync.ensure_withings_webhook("token")
+    assert calls == ["list", "revoke"]
+    assert revoked_urls == [obsolete]
+    out = capsys.readouterr().out
+    assert "Revoking obsolete Withings webhook" in out
+    assert "Withings real-time webhook active" in out
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__]))
