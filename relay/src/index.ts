@@ -146,7 +146,10 @@ interface GitHubOidcClaims {
 
 let jwksCache: { keys: any[]; expires: number } | null = null;
 const hookCooldowns = new Map<string, number>();
+const installCheckCache = new Map<string, { installed: boolean; expires: number }>();
+const usedOauthCodes = new Map<string, number>();
 const HOOK_COOLDOWN_MS = 15_000;
+const INSTALL_CACHE_MS = 10_000;
 
 async function getGitHubJwks(forceRefresh = false): Promise<any[]> {
   const now = Date.now();
@@ -220,6 +223,39 @@ async function verifyGitHubOidcToken(token: string): Promise<GitHubOidcClaims | 
 }
 
 // ── GitHub App API Helpers ──────────────────────────────────────────────────
+
+async function isAppInstalled(
+  env: Env,
+  owner: string,
+  repo: string
+): Promise<boolean> {
+  const cacheKey = `${owner}/${repo}`;
+  const now = Date.now();
+  const cached = installCheckCache.get(cacheKey);
+  if (cached && cached.expires > now) {
+    return cached.installed;
+  }
+  try {
+    const appJwt = await generateAppJwt(env.GH_APP_ID, env.GH_APP_PRIVATE_KEY);
+    const installResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/installation`, {
+      headers: {
+        Authorization: `Bearer ${appJwt}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "withings-sync-relay",
+      },
+    });
+    const installed = installResp.status === 200;
+    if (installResp.status === 200 || installResp.status === 404) {
+      if (installCheckCache.size > 1000) {
+        installCheckCache.clear();
+      }
+      installCheckCache.set(cacheKey, { installed, expires: now + INSTALL_CACHE_MS });
+    }
+    return installed;
+  } catch {
+    return false;
+  }
+}
 
 async function getInstallationAccessToken(
   env: Env,
@@ -671,6 +707,14 @@ export default {
 
     // ── 2. Register endpoint: POST /register ────────────────────────────────
     if (url.pathname === "/register" && request.method === "POST") {
+      const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
+      if (contentLength > 4096) {
+        return new Response(JSON.stringify({ error: "Payload Too Large" }), {
+          status: 413,
+          headers: { "Content-Type": "application/json", ...SECURITY_HEADERS },
+        });
+      }
+
       const authHeader = request.headers.get("Authorization") || "";
       const oidcToken = authHeader.replace(/^Bearer\s+/i, "").trim();
       if (!oidcToken) {
@@ -690,14 +734,6 @@ export default {
 
       const repo = claims.repository;
       const [owner, name] = repo.split("/");
-      const creds = await getInstallationAccessToken(env, owner, name);
-      const installed = creds?.installed ?? false;
-
-      // Signed state for OAuth (valid 15 minutes)
-      const exp = Math.floor(Date.now() / 1000) + 900;
-      const stateData = `${repo}:${exp}`;
-      const stateSig = await signHmac(env.HMAC_SECRET, stateData);
-      const state = `${btoa(stateData)}.${stateSig}`;
 
       let webhookUrl: string | null = null;
       let body: any = {};
@@ -707,11 +743,23 @@ export default {
         // empty body
       }
 
-      if (body.withings_userid && /^[0-9]+$/.test(String(body.withings_userid))) {
+      const hasValidUserid =
+        Boolean(body.withings_userid) && /^[0-9]+$/.test(String(body.withings_userid));
+
+      if (hasValidUserid) {
         const u = String(body.withings_userid);
         const hookSig = await signHmac(env.HMAC_SECRET, `${repo}:${u}`);
         webhookUrl = `${url.origin}/hook?r=${encodeURIComponent(repo)}&u=${encodeURIComponent(u)}&s=${hookSig}`;
       }
+
+      // Only query GitHub API on Run 1 (setup), when withings_userid is not yet known
+      const installed = hasValidUserid ? true : await isAppInstalled(env, owner, name);
+
+      // Signed state for OAuth (valid 15 minutes)
+      const exp = Math.floor(Date.now() / 1000) + 900;
+      const stateData = `${repo}:${exp}`;
+      const stateSig = await signHmac(env.HMAC_SECRET, stateData);
+      const state = `${btoa(stateData)}.${stateSig}`;
 
       return new Response(
         JSON.stringify({
@@ -773,6 +821,14 @@ export default {
         return renderManualFallbackPage(code, "");
       }
 
+      // Prevent duplicate dispatches if the user refreshes the callback page
+      const codeKey = `${repo}:${code}`;
+      const nowMs = Date.now();
+      const prevDispatch = usedOauthCodes.get(codeKey) || 0;
+      if (nowMs - prevDispatch < 900_000) {
+        return renderSuccessPage(repo);
+      }
+
       const [owner, name] = repo.split("/");
       const creds = await getInstallationAccessToken(env, owner, name);
       if (!creds || !creds.installed) {
@@ -784,6 +840,10 @@ export default {
       });
 
       if (dispatched) {
+        if (usedOauthCodes.size > 1000) {
+          usedOauthCodes.clear();
+        }
+        usedOauthCodes.set(codeKey, nowMs);
         return renderSuccessPage(repo);
       } else {
         return renderManualFallbackPage(code, repo);
